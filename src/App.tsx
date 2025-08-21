@@ -119,10 +119,11 @@ function App() {
   const [selectedSource, setSelectedSource] = useState<string>('coinbase')
   const [dataSources, setDataSources] = useState<DataSource[]>([])
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
   const [useStaticData, setUseStaticData] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   // Load available data sources on component mount
   useEffect(() => {
@@ -150,8 +151,13 @@ function App() {
         }
       } catch (apiError) {
         console.log('API not available, using static data')
-        sources = await staticDataService.getDataSources()
-        setUseStaticData(true)
+        try {
+          sources = await staticDataService.getDataSources()
+          setUseStaticData(true)
+        } catch (staticError) {
+          console.error('Static data service also failed:', staticError)
+          throw staticError
+        }
       }
       
       setDataSources(sources)
@@ -161,9 +167,14 @@ function App() {
       if (activeSource && !selectedSource) {
         setSelectedSource(activeSource.name)
       }
+      
+      setInitialized(true)
     } catch (err) {
       setError('Failed to load data sources')
       console.error('Error loading data sources:', err)
+      setInitialized(true)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -227,8 +238,16 @@ function App() {
 
               {/* Loading Spinner */}
               {loading && (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem' }}>
                   <LoadingSpinner />
+                  <div style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>
+                    {!initialized ? 'Initializing application...' : 'Loading backtest data...'}
+                  </div>
+                  {useStaticData && (
+                    <div style={{ marginTop: '0.5rem', color: 'orange', fontSize: '0.9rem' }}>
+                      📊 Using demo data (API not available)
+                    </div>
+                  )}
                 </div>
               )}
 

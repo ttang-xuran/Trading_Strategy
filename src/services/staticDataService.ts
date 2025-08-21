@@ -58,8 +58,15 @@ class StaticDataService {
     }
 
     try {
+      console.log(`Fetching CSV file: /${filename}`)
       const response = await fetch(`/${filename}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const csvText = await response.text()
+      console.log(`CSV file loaded, size: ${csvText.length} characters`)
       
       const result = Papa.parse(csvText, {
         header: true,
@@ -70,11 +77,12 @@ class StaticDataService {
         console.warn('CSV parsing errors:', result.errors)
       }
       
+      console.log(`Parsed ${result.data.length} rows from CSV`)
       this.dataCache.set(filename, result.data)
       return result.data as CSVRow[]
     } catch (error) {
       console.error(`Failed to load CSV file: ${filename}`, error)
-      throw new Error(`Could not load data from ${filename}`)
+      throw new Error(`Could not load data from ${filename}: ${error.message}`)
     }
   }
 
@@ -83,6 +91,8 @@ class StaticDataService {
    */
   async getBacktestResults(source: string): Promise<BacktestResult> {
     try {
+      console.log(`Loading backtest results for source: ${source}`)
+      
       // Map source names to actual CSV files
       const csvFiles: Record<string, string> = {
         coinbase: 'BTC_Coinbase_Historical.csv',
@@ -91,7 +101,10 @@ class StaticDataService {
       }
 
       const csvFile = csvFiles[source] || 'BTC_Price_full_history.csv'
+      console.log(`Loading CSV file: ${csvFile}`)
+      
       const data = await this.loadCSV(csvFile)
+      console.log(`Loaded ${data.length} rows from ${csvFile}`)
       
       // Convert CSV data to chart format
       const chartData: ChartData = {
