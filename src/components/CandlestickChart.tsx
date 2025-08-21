@@ -111,9 +111,6 @@ const CandlestickChart: React.FC<Props> = ({
       return []
     }
 
-    // Debug: Log the last 3 signals to understand what's being processed
-    console.log('Last 3 trade signals:', tradeSignals.slice(-3))
-
     // Group signals by type for different styling
     const entryLongSignals = tradeSignals.filter(signal => 
       signal.action.toUpperCase().includes('ENTRY') && 
@@ -129,11 +126,6 @@ const CandlestickChart: React.FC<Props> = ({
       !signal.action.toUpperCase().includes('FINAL') &&
       !signal.comment?.includes('End of Date Range')
     )
-
-    // Debug: Log filtered signals
-    console.log('Entry Long signals:', entryLongSignals.length, entryLongSignals.slice(-2))
-    console.log('Entry Short signals:', entryShortSignals.length, entryShortSignals.slice(-2))  
-    console.log('Exit signals:', exitSignals.length, exitSignals.slice(-2))
 
     const traces: any[] = []
 
@@ -186,13 +178,19 @@ const CandlestickChart: React.FC<Props> = ({
     // Exit signals (Orange squares)
     if (exitSignals.length > 0) {
       traces.push({
-        // Offset exit signals slightly to avoid overlap with entry signals on same date
-        x: exitSignals.map(s => {
-          const date = new Date(s.timestamp)
-          date.setHours(date.getHours() + 6) // Offset by 6 hours to avoid overlap
-          return date.toISOString()
+        x: exitSignals.map(s => s.timestamp),
+        // Position exit signals below entry signals when on same bar
+        y: exitSignals.map(s => {
+          // Check if there's an entry signal on the same date
+          const sameDate = [...entryLongSignals, ...entryShortSignals].some(entry => 
+            entry.timestamp === s.timestamp
+          )
+          if (sameDate) {
+            // Position exit mark below the price by 2% to avoid overlap
+            return s.price * 0.98
+          }
+          return s.price
         }),
-        y: exitSignals.map(s => s.price),
         mode: 'markers',
         type: 'scatter',
         name: 'Exit',
