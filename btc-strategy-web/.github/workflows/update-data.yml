@@ -1,0 +1,62 @@
+name: Update Trading Data
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC (after markets close)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pandas numpy yfinance
+        
+    - name: Download latest Bitcoin data
+      run: |
+        cd scripts
+        python download_latest_data.py
+        
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git diff --staged --quiet || git commit -m "📊 Update Bitcoin data - $(date +'%Y-%m-%d')"
+        git push || echo "No changes to push"
+
+  deploy-backend:
+    needs: update-data
+    runs-on: ubuntu-latest
+    if: ${{ needs.update-data.result == 'success' }}
+    
+    steps:
+    - name: Trigger Railway Deployment
+      run: |
+        curl -X POST "${{ secrets.RAILWAY_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d '{"trigger": "data-update"}'
+        
+  notify:
+    needs: [update-data, deploy-backend]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify Discord/Slack (Optional)
+      if: failure()
+      run: |
+        echo "Data update failed - you may want to set up notifications"
+        # Add webhook notification here if desired
