@@ -249,6 +249,11 @@ const CandlestickChart: React.FC<Props> = ({
       spikesnap: 'cursor',
       spikemode: 'across',
       spikethickness: 1,
+      // Set default range to 6 months from latest data
+      range: [
+        new Date(dataDateRange.end.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        dataDateRange.end.toISOString().split('T')[0]
+      ],
       // Enable better date range controls - use actual data dates
       rangeselector: {
         visible: true,
@@ -288,7 +293,9 @@ const CandlestickChart: React.FC<Props> = ({
             stepmode: 'backward'
           },
           { step: 'all', label: 'All' }
-        ]
+        ],
+        // Set 6M as default active button
+        active: 2  // 6M is index 2 (0=1M, 1=3M, 2=6M)
       }
     },
     yaxis: {
