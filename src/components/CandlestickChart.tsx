@@ -301,8 +301,8 @@ const CandlestickChart: React.FC<Props> = ({
     // Upper boundary line (red/green based on TradingView style)
     if (chartData.upper_boundary && chartData.upper_boundary.length > 0) {
       traces.push({
-        x: chartData.upper_boundary.map(point => point.timestamp),
-        y: chartData.upper_boundary.map(point => point.value),
+        x: chartData.upper_boundary.map(point => (point as any).timestamp || (point as any).x),
+        y: chartData.upper_boundary.map(point => (point as any).value || (point as any).y),
         mode: 'lines',
         type: 'scatter',
         name: 'Upper Boundary',
@@ -320,8 +320,8 @@ const CandlestickChart: React.FC<Props> = ({
     // Lower boundary line
     if (chartData.lower_boundary && chartData.lower_boundary.length > 0) {
       traces.push({
-        x: chartData.lower_boundary.map(point => point.timestamp),
-        y: chartData.lower_boundary.map(point => point.value),
+        x: chartData.lower_boundary.map(point => (point as any).timestamp || (point as any).x),
+        y: chartData.lower_boundary.map(point => (point as any).value || (point as any).y),
         mode: 'lines',
         type: 'scatter',
         name: 'Lower Boundary',
