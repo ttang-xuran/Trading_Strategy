@@ -3,11 +3,12 @@
  * Interactive Bitcoin price chart with trade signals, similar to TradingView
  */
 
-import React, { useMemo, useEffect, useRef } from 'react'
+import React, { useMemo, useRef } from 'react'
 import Plot from 'react-plotly.js'
 import styled from 'styled-components'
 import { format } from 'date-fns'
-import type { ChartData, TradeSignal, PlotlyTrace, PlotlyLayout } from '../types/api'
+import type { ChartData, TradeSignal, PlotlyLayout } from '../types/api'
+import LivePriceDisplay from './LivePriceDisplay'
 
 interface Props {
   chartData: ChartData
@@ -186,8 +187,8 @@ const CandlestickChart: React.FC<Props> = ({
             entry.timestamp === s.timestamp
           )
           if (sameDate) {
-            // Position exit mark below the price by 2% to avoid overlap
-            return s.price * 0.98
+            // Position exit mark further below the price by 4% to avoid overlap
+            return s.price * 0.96
           }
           return s.price
         }),
@@ -196,9 +197,9 @@ const CandlestickChart: React.FC<Props> = ({
         name: 'Exit',
         marker: {
           symbol: 'x',
-          size: 18,
+          size: 12,
           color: '#ffff00',
-          line: { width: 3, color: '#000000' }
+          line: { width: 2, color: '#000000' }
         },
         text: exitSignals.map(s => {
           const pnlText = s.pnl ? `<br>P&L: $${s.pnl.toLocaleString()}` : ''
@@ -258,7 +259,6 @@ const CandlestickChart: React.FC<Props> = ({
       rangeslider: { visible: false }, // Keep rangeslider hidden for cleaner look
       showgrid: true,
       gridcolor: '#30363d',
-      gridwidth: 1,
       zeroline: false,
       showspikes: true,
       spikecolor: '#f0f6fc',
@@ -319,7 +319,6 @@ const CandlestickChart: React.FC<Props> = ({
       side: 'right',
       showgrid: true,
       gridcolor: '#30363d',
-      gridwidth: 1,
       zeroline: false,
       showspikes: true,
       spikecolor: '#f0f6fc',
@@ -340,7 +339,6 @@ const CandlestickChart: React.FC<Props> = ({
       y: 0.98,
       bgcolor: 'rgba(22, 27, 34, 0.8)',
       bordercolor: '#30363d',
-      borderwidth: 1,
       font: { size: 11 }
     },
     margin: { l: 0, r: 60, t: 80, b: 40 },
@@ -479,23 +477,24 @@ const CandlestickChart: React.FC<Props> = ({
         </TimeframeSelector>
       </ChartHeader>
 
-      <div style={{ height: `${height - 60}px` }}>
+      <div style={{ height: `${height - 60}px`, position: 'relative' }}>
         <Plot
           ref={plotRef}
-          data={allTraces}
-          layout={layout}
-          config={config}
+          data={allTraces as any}
+          layout={layout as any}
+          config={config as any}
           style={{ width: '100%', height: '100%' }}
           useResizeHandler={true}
-          onInitialized={(figure) => {
+          onInitialized={() => {
             // Enable scroll zoom after initialization
             if (plotRef.current && plotRef.current.el) {
-              plotRef.current.el.on('plotly_relayout', (eventdata: any) => {
+              plotRef.current.el.on('plotly_relayout', () => {
                 // Handle zoom/pan events if needed
               })
             }
           }}
         />
+        <LivePriceDisplay tradeSignals={tradeSignals} />
       </div>
     </ChartContainer>
   )

@@ -6,7 +6,6 @@
 import React, { useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import styled from 'styled-components'
-import { format } from 'date-fns'
 import type { EquityCurve as IEquityCurve } from '../types/api'
 
 interface Props {
@@ -228,9 +227,9 @@ const EquityCurve: React.FC<Props> = ({ equityCurve, height = 300 }) => {
       <div style={{ height: `${height}px` }}>
         {traces.length > 0 ? (
           <Plot
-            data={traces}
-            layout={layout}
-            config={config}
+            data={traces as any}
+            layout={layout as any}
+            config={config as any}
             style={{ width: '100%', height: '100%' }}
             useResizeHandler={true}
           />

@@ -16,7 +16,15 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          plotly: ['react-plotly.js', 'plotly.js']
+        }
+      }
+    }
   },
   define: {
     'process.env': {},
