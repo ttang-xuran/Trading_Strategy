@@ -5,7 +5,7 @@
 
 import React from 'react'
 import styled from 'styled-components'
-import { FiTrendingUp, FiTrendingDown, FiTarget, FiDollarSign, FiPercent, FiBarChart3 } from 'react-icons/fi'
+import { FiTrendingUp, FiTrendingDown, FiTarget, FiDollarSign, FiPercent, FiBarChart } from 'react-icons/fi'
 import type { PerformanceMetrics as IPerformanceMetrics } from '../types/api'
 
 interface Props {
@@ -154,7 +154,7 @@ const PerformanceMetrics: React.FC<Props> = ({ metrics }) => {
       <MetricCard variant="neutral">
         <MetricHeader>
           <MetricIcon color="var(--accent-blue)">
-            <FiBarChart3 />
+            <FiBarChart />
           </MetricIcon>
           <MetricTitle>Total Trades</MetricTitle>
         </MetricHeader>
