@@ -1,0 +1,12 @@
+{
+  "name": "btc-trading-strategy-root",
+  "version": "1.0.0",
+  "scripts": {
+    "install-frontend": "cd btc-strategy-web/frontend && npm install",
+    "build": "cd btc-strategy-web/frontend && npm run build",
+    "dev": "cd btc-strategy-web/frontend && npm run dev"
+  },
+  "workspaces": [
+    "btc-strategy-web/frontend"
+  ]
+}
