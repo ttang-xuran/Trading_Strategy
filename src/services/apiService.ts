@@ -24,7 +24,7 @@ class ApiService {
     // Create axios instance with default configuration
     this.api = axios.create({
       baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-      timeout: 30000, // 30 seconds
+      timeout: 5000, // 5 seconds - fast timeout for sleeping APIs
       headers: {
         'Content-Type': 'application/json',
       },
