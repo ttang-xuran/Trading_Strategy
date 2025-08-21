@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+    <style>
+        body { 
+            background: white; 
+            color: black; 
+            font-family: Arial; 
+            padding: 50px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Page Working!</h1>
+    <p>If you can see this, the server is working.</p>
+    <p>Time: <span id="time"></span></p>
+    <script>
+        document.getElementById('time').textContent = new Date().toLocaleString();
+        console.log('Test page JavaScript working!');
+    </script>
+</body>
+</html>
