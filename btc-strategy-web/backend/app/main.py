@@ -51,6 +51,7 @@ backtest_service = BacktestService()
 @app.get("/")
 async def root():
     """Health check endpoint"""
+    # Force redeploy to wake up Railway service - 2025-08-21
     return {
         "message": "BTC Trading Strategy API",
         "version": "1.0.0",
