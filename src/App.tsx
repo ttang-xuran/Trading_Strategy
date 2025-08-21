@@ -13,6 +13,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 
 // Services
 import { apiService } from './services/apiService'
+import { staticDataService } from './services/staticDataService'
 
 // Types
 import type { DataSource, BacktestResult } from './types/api'
@@ -121,6 +122,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
+  const [useStaticData, setUseStaticData] = useState(false)
 
   // Load available data sources on component mount
   useEffect(() => {
@@ -136,7 +138,22 @@ function App() {
 
   const loadDataSources = async () => {
     try {
-      const sources = await apiService.getDataSources()
+      // Try API first, fallback to static data
+      let sources: DataSource[]
+      try {
+        const isApiAvailable = await apiService.isAvailable()
+        if (isApiAvailable) {
+          sources = await apiService.getDataSources()
+          setUseStaticData(false)
+        } else {
+          throw new Error('API not available')
+        }
+      } catch (apiError) {
+        console.log('API not available, using static data')
+        sources = await staticDataService.getDataSources()
+        setUseStaticData(true)
+      }
+      
       setDataSources(sources)
       
       // Set first active source as default
@@ -155,7 +172,9 @@ function App() {
     setError(null)
     
     try {
-      const result = await apiService.getBacktestResults(source)
+      const result = useStaticData 
+        ? await staticDataService.getBacktestResults(source)
+        : await apiService.getBacktestResults(source)
       setBacktestResult(result)
     } catch (err) {
       setError(`Failed to load backtest data for ${source}`)
@@ -197,6 +216,7 @@ function App() {
                 
                 {backtestResult && (
                   <div style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    {useStaticData && <span style={{ color: 'orange', marginRight: '1rem' }}>📊 Demo Mode</span>}
                     Last updated: {new Date(backtestResult.run_timestamp).toLocaleString()}
                   </div>
                 )}

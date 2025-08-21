@@ -10,33 +10,35 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "plotly.js": "^2.27.0",
-    "react-plotly.js": "^2.6.0",
+    "@types/papaparse": "^5.3.16",
     "axios": "^1.6.0",
-    "react-router-dom": "^6.18.0",
-    "styled-components": "^6.1.1",
     "date-fns": "^2.30.0",
     "lodash": "^4.17.21",
-    "react-query": "^3.39.3",
-    "react-select": "^5.8.0",
+    "papaparse": "^5.5.3",
+    "plotly.js": "^2.27.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-icons": "^4.12.0",
-    "recharts": "^2.8.0"
+    "react-plotly.js": "^2.6.0",
+    "react-query": "^3.39.3",
+    "react-router-dom": "^6.18.0",
+    "react-select": "^5.8.0",
+    "recharts": "^2.8.0",
+    "styled-components": "^6.1.1"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "@types/plotly.js": "^2.12.29",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
-    "@types/plotly.js": "^2.12.29",
     "@types/react-plotly.js": "^2.6.0",
-    "@types/lodash": "^4.14.202",
-    "@vitejs/plugin-react": "^4.1.0",
-    "typescript": "^5.2.2",
-    "vite": "^4.5.0",
-    "eslint": "^8.53.0",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.1.0",
+    "eslint": "^8.53.0",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.4"
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0"
   }
 }
