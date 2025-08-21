@@ -1,6 +1,7 @@
 /**
  * Performance Metrics Component
  * Displays key trading strategy performance indicators
+ * Fixed FiBarChart3 import issue
  */
 
 import React from 'react'
