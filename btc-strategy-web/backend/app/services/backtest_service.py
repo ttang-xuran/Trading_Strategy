@@ -60,13 +60,16 @@ class BacktestService:
             # Run backtest
             strategy.run_exact_backtest(strategy_df)
             
+            # Store the dataframe with boundaries for chart generation
+            strategy.prepared_df = strategy_df
+            
             # Generate results
             performance_metrics = self._calculate_performance_metrics(strategy)
             trade_signals = self._extract_trade_signals(strategy)
             equity_curve = self._generate_equity_curve(strategy)
             
             # Create chart data with strategy lines
-            chart_data = await self._generate_chart_data(source, strategy, strategy_df)
+            chart_data = await self._generate_chart_data(source, strategy)
             
             result = BacktestResult(
                 source=source,
@@ -237,7 +240,7 @@ class BacktestService:
             max_drawdown_percent=abs(min([p.drawdown_percent for p in equity_points], default=0))
         )
     
-    async def _generate_chart_data(self, source: str, strategy: ExactPineScriptStrategy, df: pd.DataFrame):
+    async def _generate_chart_data(self, source: str, strategy: ExactPineScriptStrategy):
         """Generate chart data with strategy boundaries"""
         # Get basic chart data
         chart_data = await self.data_service.get_chart_data(source, days=0)  # All data
@@ -246,17 +249,20 @@ class BacktestService:
         upper_boundary = []
         lower_boundary = []
         
-        if 'upper_boundary' in df.columns and 'lower_boundary' in df.columns:
-            for idx, row in df.iterrows():
-                if not pd.isna(row['upper_boundary']) and not pd.isna(row['lower_boundary']):
-                    upper_boundary.append({
-                        'x': idx.isoformat(),
-                        'y': float(row['upper_boundary'])
-                    })
-                    lower_boundary.append({
-                        'x': idx.isoformat(),
-                        'y': float(row['lower_boundary'])
-                    })
+        # Use the prepared dataframe stored in strategy
+        if hasattr(strategy, 'prepared_df') and strategy.prepared_df is not None:
+            df = strategy.prepared_df
+            if 'upper_boundary' in df.columns and 'lower_boundary' in df.columns:
+                for idx, row in df.iterrows():
+                    if not pd.isna(row['upper_boundary']) and not pd.isna(row['lower_boundary']):
+                        upper_boundary.append({
+                            'timestamp': idx.isoformat(),
+                            'value': float(row['upper_boundary'])
+                        })
+                        lower_boundary.append({
+                            'timestamp': idx.isoformat(),
+                            'value': float(row['lower_boundary'])
+                        })
         
         # Update chart data with boundaries
         chart_data.upper_boundary = upper_boundary

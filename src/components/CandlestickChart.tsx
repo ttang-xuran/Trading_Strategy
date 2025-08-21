@@ -220,21 +220,52 @@ const CandlestickChart: React.FC<Props> = ({
     }
   }, [chartData])
 
-  // Chart layout configuration
+  // Chart layout configuration - TradingView style
   const layout: Partial<PlotlyLayout> = {
     title: `Bitcoin (BTC/USD) - ${source.toUpperCase()}`,
     xaxis: {
       title: 'Date',
       type: 'date',
-      rangeslider: { visible: false },
+      rangeslider: { visible: false }, // Keep rangeslider hidden for cleaner look
       showgrid: true,
       gridcolor: '#30363d',
+      gridwidth: 1,
+      zeroline: false,
+      showspikes: true,
+      spikecolor: '#f0f6fc',
+      spikesnap: 'cursor',
+      spikemode: 'across',
+      spikethickness: 1,
+      // Enable better date range controls
+      rangeselector: {
+        visible: true,
+        bgcolor: 'rgba(22, 27, 34, 0.8)',
+        bordercolor: '#30363d',
+        x: 0,
+        y: 1.02,
+        buttons: [
+          { count: 7, label: '7D', step: 'day', stepmode: 'backward' },
+          { count: 30, label: '1M', step: 'day', stepmode: 'backward' },
+          { count: 90, label: '3M', step: 'day', stepmode: 'backward' },
+          { count: 180, label: '6M', step: 'day', stepmode: 'backward' },
+          { count: 365, label: '1Y', step: 'day', stepmode: 'backward' },
+          { step: 'all', label: 'All' }
+        ]
+      }
     },
     yaxis: {
       title: 'Price (USD)',
       side: 'right',
       showgrid: true,
       gridcolor: '#30363d',
+      gridwidth: 1,
+      zeroline: false,
+      showspikes: true,
+      spikecolor: '#f0f6fc',
+      spikesnap: 'cursor',
+      spikemode: 'across',
+      spikethickness: 1,
+      tickformat: '$,.0f'
     },
     plot_bgcolor: '#0d1117',
     paper_bgcolor: '#161b22',
@@ -244,35 +275,135 @@ const CandlestickChart: React.FC<Props> = ({
     },
     showlegend: true,
     legend: {
-      x: 0,
-      y: 1,
+      x: 0.02,
+      y: 0.98,
       bgcolor: 'rgba(22, 27, 34, 0.8)',
-      bordercolor: '#30363d'
+      bordercolor: '#30363d',
+      borderwidth: 1,
+      font: { size: 11 }
     },
-    margin: { l: 0, r: 60, t: 60, b: 40 },
+    margin: { l: 0, r: 60, t: 80, b: 40 },
     height: height,
+    // Enable crossfilter-style interactions
+    dragmode: 'pan',
+    hovermode: 'x unified',
+    hoverlabel: {
+      bgcolor: 'rgba(22, 27, 34, 0.95)',
+      bordercolor: '#30363d',
+      font: { color: '#f0f6fc' }
+    }
   }
 
-  // Combine all traces
-  const allTraces = candlestickTrace ? [candlestickTrace, ...tradeSignalTraces] : []
+  // Process boundary lines (upper and lower breakout levels)
+  const boundaryTraces = useMemo(() => {
+    const traces: any[] = []
+    
+    // Upper boundary line (red/green based on TradingView style)
+    if (chartData.upper_boundary && chartData.upper_boundary.length > 0) {
+      traces.push({
+        x: chartData.upper_boundary.map(point => point.timestamp),
+        y: chartData.upper_boundary.map(point => point.value),
+        mode: 'lines',
+        type: 'scatter',
+        name: 'Upper Boundary',
+        line: {
+          color: '#ff6b6b',  // Red like TradingView
+          width: 1.5,
+          dash: 'dot'
+        },
+        hovertemplate: 'Upper Boundary: $%{y:,.2f}<extra></extra>',
+        xaxis: 'x',
+        yaxis: 'y',
+      })
+    }
+    
+    // Lower boundary line
+    if (chartData.lower_boundary && chartData.lower_boundary.length > 0) {
+      traces.push({
+        x: chartData.lower_boundary.map(point => point.timestamp),
+        y: chartData.lower_boundary.map(point => point.value),
+        mode: 'lines',
+        type: 'scatter',
+        name: 'Lower Boundary',
+        line: {
+          color: '#51cf66',  // Green like TradingView
+          width: 1.5,
+          dash: 'dot'
+        },
+        hovertemplate: 'Lower Boundary: $%{y:,.2f}<extra></extra>',
+        xaxis: 'x',
+        yaxis: 'y',
+      })
+    }
+    
+    return traces
+  }, [chartData.upper_boundary, chartData.lower_boundary])
 
-  // Chart configuration
+  // Combine all traces
+  const allTraces = candlestickTrace ? [candlestickTrace, ...boundaryTraces, ...tradeSignalTraces] : []
+
+  // Chart configuration - TradingView-like toolbar
   const config = {
     responsive: true,
     displayModeBar: true,
+    modeBarButtonsToAdd: [
+      {
+        name: 'Reset View',
+        icon: {
+          width: 857.1,
+          height: 1000,
+          path: 'm214 511h285v285h571v-571h-285v-285h-571v571z',
+          transform: 'matrix(1 0 0 -1 0 850)'
+        },
+        click: (gd: any) => {
+          const update = {
+            'xaxis.autorange': true,
+            'yaxis.autorange': true
+          }
+          // @ts-ignore
+          Plotly.relayout(gd, update)
+        }
+      }
+    ],
     modeBarButtons: [
-      ['zoom2d', 'pan2d', 'select2d', 'lasso2d'],
-      ['zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d'],
-      ['toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian'],
+      // Zoom and Pan tools
+      [{
+        name: 'zoom',
+        title: 'Zoom',
+        icon: { path: 'M1 5 A 4 4 0 0 0 5 9 L 11 15 A 1.5 1.5 0 0 0 13 13 L 7 7 A 4 4 0 0 0 5 1 Z M 5 3 A 2 2 0 1 1 5 7 A 2 2 0 1 1 5 3' },
+        click: 'zoom2d'
+      }, {
+        name: 'pan',
+        title: 'Pan',
+        icon: { path: 'M8 1l-3 3h2v3h3v-3h2l-4-4zm8 8v3h-2l3 3 3-3h-2v-3h-2zm-8 8l3-3h-2v-3h-3v3h-2l4 4zm-8-8v-3h2l-3-3-3 3h2v3h2z' },
+        click: 'pan2d'
+      }],
+      // Zoom controls
+      ['zoomIn2d', 'zoomOut2d', 'autoScale2d'],
+      // Selection tools
+      [{
+        name: 'select',
+        title: 'Box Select',
+        icon: { path: 'M1 1h15v15h-15z' },
+        click: 'select2d'
+      }],
+      // View options
+      ['resetScale2d'],
+      // Download
+      ['toImage']
     ],
     displaylogo: false,
     toImageButtonOptions: {
       format: 'png',
-      filename: `btc-chart-${source}-${format(new Date(), 'yyyy-MM-dd')}`,
-      height: 600,
-      width: 1200,
-      scale: 1
-    }
+      filename: `btc-strategy-chart-${source}-${format(new Date(), 'yyyy-MM-dd')}`,
+      height: 800,
+      width: 1400,
+      scale: 2
+    },
+    // Enable double-click reset
+    doubleClick: 'reset+autosize',
+    // Enable scroll zoom
+    scrollZoom: true
   }
 
   return (

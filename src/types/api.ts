@@ -33,8 +33,8 @@ export interface OHLCV {
 
 export interface ChartData {
   candles: OHLCV[]
-  upper_boundary: Array<{x: string, y: number}>
-  lower_boundary: Array<{x: string, y: number}>
+  upper_boundary: Array<{timestamp: string, value: number}>
+  lower_boundary: Array<{timestamp: string, value: number}>
   source: string
   timeframe: string
   total_candles: number
