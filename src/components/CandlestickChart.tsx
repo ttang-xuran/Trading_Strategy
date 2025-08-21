@@ -121,8 +121,10 @@ const CandlestickChart: React.FC<Props> = ({
       signal.action.toUpperCase().includes('SHORT')
     )
     const exitSignals = tradeSignals.filter(signal => 
-      signal.action.toUpperCase().includes('CLOSE') || 
-      signal.action.toUpperCase().includes('STOP LOSS')
+      (signal.action.toUpperCase().includes('CLOSE') || 
+       signal.action.toUpperCase().includes('STOP LOSS')) &&
+      !signal.action.toUpperCase().includes('FINAL') &&
+      !signal.comment?.includes('End of Date Range')
     )
 
     const traces: any[] = []
