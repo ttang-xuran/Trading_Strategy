@@ -284,8 +284,8 @@ const CandlestickChart: React.FC<Props> = ({
     },
     margin: { l: 0, r: 60, t: 80, b: 40 },
     height: height,
-    // Enable crossfilter-style interactions
-    dragmode: 'zoom', // Change to zoom instead of pan for better scroll interaction
+    // Enable crossfilter-style interactions  
+    dragmode: 'pan', // Default to pan mode for click-and-drag behavior like TradingView
     hovermode: 'x unified',
     hoverlabel: {
       bgcolor: 'rgba(22, 27, 34, 0.95)',
@@ -300,13 +300,6 @@ const CandlestickChart: React.FC<Props> = ({
   const boundaryTraces = useMemo(() => {
     const traces: any[] = []
     
-    // Debug logging
-    console.log('Chart data boundaries:', {
-      upper_count: chartData.upper_boundary?.length || 0,
-      lower_count: chartData.lower_boundary?.length || 0,
-      sample_upper: chartData.upper_boundary?.[0],
-      sample_lower: chartData.lower_boundary?.[0]
-    })
     
     // Upper boundary line (red/green based on TradingView style)
     if (chartData.upper_boundary && chartData.upper_boundary.length > 0) {
