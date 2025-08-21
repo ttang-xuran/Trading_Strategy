@@ -113,13 +113,16 @@ const CandlestickChart: React.FC<Props> = ({
 
     // Group signals by type for different styling
     const entryLongSignals = tradeSignals.filter(signal => 
-      signal.action.includes('ENTRY_LONG') || signal.action.includes('ENTRY_Long')
+      signal.action.toUpperCase().includes('ENTRY') && 
+      signal.action.toUpperCase().includes('LONG')
     )
     const entryShortSignals = tradeSignals.filter(signal => 
-      signal.action.includes('ENTRY_SHORT') || signal.action.includes('ENTRY_Short')
+      signal.action.toUpperCase().includes('ENTRY') && 
+      signal.action.toUpperCase().includes('SHORT')
     )
     const exitSignals = tradeSignals.filter(signal => 
-      signal.action.includes('CLOSE') || signal.action.includes('Stop Loss')
+      signal.action.toUpperCase().includes('CLOSE') || 
+      signal.action.toUpperCase().includes('STOP LOSS')
     )
 
     const traces: any[] = []
@@ -134,9 +137,9 @@ const CandlestickChart: React.FC<Props> = ({
         name: 'Long Entry',
         marker: {
           symbol: 'triangle-up',
-          size: 12,
-          color: '#238636',
-          line: { width: 2, color: 'white' }
+          size: 14,
+          color: '#00ff00',
+          line: { width: 2, color: '#ffffff' }
         },
         text: entryLongSignals.map(s => 
           `${s.action}<br>Price: $${s.price.toLocaleString()}<br>Size: ${s.size.toFixed(4)}<br>${s.comment}`
@@ -157,9 +160,9 @@ const CandlestickChart: React.FC<Props> = ({
         name: 'Short Entry',
         marker: {
           symbol: 'triangle-down',
-          size: 12,
-          color: '#da3633',
-          line: { width: 2, color: 'white' }
+          size: 14,
+          color: '#ff0000',
+          line: { width: 2, color: '#ffffff' }
         },
         text: entryShortSignals.map(s => 
           `${s.action}<br>Price: $${s.price.toLocaleString()}<br>Size: ${s.size.toFixed(4)}<br>${s.comment}`
@@ -179,10 +182,10 @@ const CandlestickChart: React.FC<Props> = ({
         type: 'scatter',
         name: 'Exit',
         marker: {
-          symbol: 'square',
-          size: 10,
-          color: '#fd7e14',
-          line: { width: 2, color: 'white' }
+          symbol: 'x',
+          size: 16,
+          color: '#ffff00',
+          line: { width: 3, color: '#000000' }
         },
         text: exitSignals.map(s => {
           const pnlText = s.pnl ? `<br>P&L: $${s.pnl.toLocaleString()}` : ''
