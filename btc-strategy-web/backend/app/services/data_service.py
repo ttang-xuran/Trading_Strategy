@@ -15,8 +15,11 @@ import asyncio
 import aiofiles
 import json
 
-# Add parent directory to access our existing data fetching code
-sys.path.append('/home/ttang/Super BTC trading Strategy')
+# Add parent directories to access our existing data fetching code
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(os.path.dirname(current_dir))
+project_root = os.path.dirname(os.path.dirname(backend_dir))
+sys.path.append(project_root)
 
 from app.models.strategy_models import DataSource, ChartData, OHLCV, UpdateStatus
 
@@ -24,9 +27,17 @@ class DataService:
     """Service for managing cryptocurrency data from multiple sources"""
     
     def __init__(self):
-        self.db_path = "/home/ttang/Super BTC trading Strategy/btc-strategy-web/data/strategy_data.db"
-        self.raw_data_path = "/home/ttang/Super BTC trading Strategy/btc-strategy-web/data/raw"
-        self.processed_data_path = "/home/ttang/Super BTC trading Strategy/btc-strategy-web/data/processed"
+        # Use dynamic paths based on current file location
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        backend_dir = os.path.dirname(os.path.dirname(current_dir))
+        web_project_dir = os.path.dirname(backend_dir)
+        project_root = os.path.dirname(web_project_dir)
+        
+        self.db_path = os.path.join(web_project_dir, "data", "strategy_data.db")
+        self.raw_data_path = os.path.join(web_project_dir, "data", "raw")
+        self.processed_data_path = os.path.join(web_project_dir, "data", "processed")
+        self.project_root = project_root
+        self.backend_dir = backend_dir
         
         # Ensure directories exist
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
@@ -36,41 +47,49 @@ class DataService:
         # Initialize database
         self.init_database()
         
-        # Data source configurations
+        # Data source configurations - check both local backend and project root  
+        def get_data_file_path(filename):
+            # First try in backend directory (for Railway deployment)
+            local_path = os.path.join(self.backend_dir, filename)
+            if os.path.exists(local_path):
+                return local_path
+            # Fallback to project root (for local development)
+            return os.path.join(self.project_root, filename)
+        
         self.sources = {
             "coinbase": {
                 "display_name": "Coinbase Pro",
-                "file_path": "/home/ttang/Super BTC trading Strategy/BTC_Coinbase_Historical.csv",
+                "file_path": get_data_file_path("BTC_Coinbase_Historical.csv"),
                 "api_url": None,  # Using existing file
                 "status": "active"
             },
             "binance": {
                 "display_name": "Binance",
-                "file_path": "/home/ttang/Super BTC trading Strategy/BTC_Binance_Historical.csv",
+                "file_path": get_data_file_path("BTC_Binance_Historical.csv"),
                 "api_url": "https://api.binance.com/api/v3/klines",
                 "status": "active"
             },
             "kraken": {
                 "display_name": "Kraken",
-                "file_path": "/home/ttang/Super BTC trading Strategy/BTC_Kraken_Historical.csv",
+                "file_path": get_data_file_path("BTC_Kraken_Historical.csv"),
                 "api_url": "https://api.kraken.com/0/public/OHLC",
                 "status": "active"
             },
             "bitstamp": {
                 "display_name": "Bitstamp",
-                "file_path": "/home/ttang/Super BTC trading Strategy/BTC_Bitstamp_Historical.csv",
+                "file_path": get_data_file_path("BTC_Bitstamp_Historical.csv"),
                 "api_url": "https://www.bitstamp.net/api/v2/ohlc/btcusd/",
                 "status": "active"
             },
             "cryptocompare": {
                 "display_name": "CryptoCompare",
-                "file_path": "/home/ttang/Super BTC trading Strategy/BTC_CryptoCompare_Historical.csv",
+                "file_path": get_data_file_path("BTC_CryptoCompare_Historical.csv"),
                 "api_url": "https://min-api.cryptocompare.com/data/v2/histoday",
                 "status": "active"
             },
             "coinmetrics": {
                 "display_name": "Coin Metrics",
-                "file_path": "/home/ttang/Super BTC trading Strategy/BTC_CoinMetrics_Historical.csv",
+                "file_path": get_data_file_path("BTC_CoinMetrics_Historical.csv"),
                 "api_url": "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics",
                 "status": "limited"  # Limited data
             }

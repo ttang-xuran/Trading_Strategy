@@ -12,7 +12,13 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 
 # Import our existing strategy implementation
-sys.path.append('/home/ttang/Super BTC trading Strategy')
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(os.path.dirname(current_dir))
+web_project_dir = os.path.dirname(backend_dir)
+project_root = os.path.dirname(web_project_dir)
+# Add both backend dir and project root to path for flexibility
+sys.path.append(backend_dir)
+sys.path.append(project_root)
 from exact_pine_script_implementation import ExactPineScriptStrategy
 
 from app.models.strategy_models import (

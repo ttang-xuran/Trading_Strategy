@@ -8,6 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -23,12 +24,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Copy the strategy files from parent directory
-COPY ../../exact_pine_script_implementation.py /app/exact_pine_script_implementation.py
-COPY ../../BTC_*.csv /app/data/
-
 # Create necessary directories
 RUN mkdir -p /app/data/raw /app/data/processed
+
+# Copy strategy files and data files
+# These are now copied to the backend directory by our setup process
+# The services will find them automatically
 
 # Expose port
 EXPOSE 8000

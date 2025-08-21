@@ -14,8 +14,12 @@ from datetime import datetime, timedelta
 import os
 import sys
 
-# Add parent directory to path to import our strategy
-sys.path.append('/home/ttang/Super BTC trading Strategy')
+# Add parent directories to path to import our strategy
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+strategy_dir = os.path.dirname(os.path.dirname(parent_dir))
+sys.path.append(strategy_dir)
+sys.path.append(parent_dir)
 
 from app.services.data_service import DataService
 from app.services.backtest_service import BacktestService
