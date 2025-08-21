@@ -5,7 +5,7 @@
 
 import React from 'react'
 import styled from 'styled-components'
-import { FiBitcoin, FiTrendingUp, FiGithub, FiInfo } from 'react-icons/fi'
+import { FiCircle, FiTrendingUp, FiGithub, FiInfo } from 'react-icons/fi'
 
 const HeaderContainer = styled.header`
   background-color: var(--bg-secondary);
@@ -85,7 +85,7 @@ const Header: React.FC = () => {
       <LeftSection>
         <Logo>
           <LogoIcon>
-            <FiBitcoin />
+            <FiCircle />
           </LogoIcon>
           <div>
             <div>BTC Strategy</div>
