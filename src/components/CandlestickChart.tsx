@@ -220,6 +220,19 @@ const CandlestickChart: React.FC<Props> = ({
     }
   }, [chartData])
 
+  // Calculate data date range for proper range selector
+  const dataDateRange = useMemo(() => {
+    if (!chartData.candles || chartData.candles.length === 0) {
+      return { start: new Date(), end: new Date() }
+    }
+    
+    const dates = chartData.candles.map(candle => new Date(candle.timestamp))
+    return {
+      start: dates[0],
+      end: dates[dates.length - 1]
+    }
+  }, [chartData.candles])
+
   // Chart layout configuration - TradingView style
   const layout: Partial<PlotlyLayout> = {
     title: `Bitcoin (BTC/USD) - ${source.toUpperCase()}`,
@@ -236,7 +249,7 @@ const CandlestickChart: React.FC<Props> = ({
       spikesnap: 'cursor',
       spikemode: 'across',
       spikethickness: 1,
-      // Enable better date range controls
+      // Enable better date range controls - use actual data dates
       rangeselector: {
         visible: true,
         bgcolor: 'rgba(22, 27, 34, 0.8)',
@@ -244,11 +257,36 @@ const CandlestickChart: React.FC<Props> = ({
         x: 0,
         y: 1.02,
         buttons: [
-          { count: 7, label: '7D', step: 'day', stepmode: 'backward' },
-          { count: 30, label: '1M', step: 'day', stepmode: 'backward' },
-          { count: 90, label: '3M', step: 'day', stepmode: 'backward' },
-          { count: 180, label: '6M', step: 'day', stepmode: 'backward' },
-          { count: 365, label: '1Y', step: 'day', stepmode: 'backward' },
+          { 
+            count: 30, 
+            label: '1M', 
+            step: 'day', 
+            stepmode: 'backward'
+          },
+          { 
+            count: 90, 
+            label: '3M', 
+            step: 'day', 
+            stepmode: 'backward'
+          },
+          { 
+            count: 180, 
+            label: '6M', 
+            step: 'day', 
+            stepmode: 'backward'
+          },
+          {
+            label: 'YTD',
+            // Year to date - from Jan 1, 2025 to latest data
+            step: 'year',
+            stepmode: 'todate'
+          },
+          { 
+            count: 365, 
+            label: '1Y', 
+            step: 'day', 
+            stepmode: 'backward'
+          },
           { step: 'all', label: 'All' }
         ]
       }
