@@ -1,12 +1,33 @@
 {
-  "buildCommand": "cd btc-strategy-web/frontend && npm install && npm run build",
-  "outputDirectory": "btc-strategy-web/frontend/dist",
-  "installCommand": "cd btc-strategy-web/frontend && npm install",
-  "framework": null,
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+  "name": "btc-strategy-frontend",
+  "version": 2,
+  "build": {
+    "env": {
+      "VITE_API_URL": "@api_url"
     }
-  ]
+  },
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "headers": {
+        "cache-control": "max-age=31536000, immutable"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "VITE_API_URL": "@api_url"
+  }
 }
