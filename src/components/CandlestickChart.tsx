@@ -285,18 +285,28 @@ const CandlestickChart: React.FC<Props> = ({
     margin: { l: 0, r: 60, t: 80, b: 40 },
     height: height,
     // Enable crossfilter-style interactions
-    dragmode: 'pan',
+    dragmode: 'zoom', // Change to zoom instead of pan for better scroll interaction
     hovermode: 'x unified',
     hoverlabel: {
       bgcolor: 'rgba(22, 27, 34, 0.95)',
       bordercolor: '#30363d',
       font: { color: '#f0f6fc' }
-    }
+    },
+    // Additional zoom settings
+    selectdirection: 'diagonal'
   }
 
   // Process boundary lines (upper and lower breakout levels)
   const boundaryTraces = useMemo(() => {
     const traces: any[] = []
+    
+    // Debug logging
+    console.log('Chart data boundaries:', {
+      upper_count: chartData.upper_boundary?.length || 0,
+      lower_count: chartData.lower_boundary?.length || 0,
+      sample_upper: chartData.upper_boundary?.[0],
+      sample_lower: chartData.lower_boundary?.[0]
+    })
     
     // Upper boundary line (red/green based on TradingView style)
     if (chartData.upper_boundary && chartData.upper_boundary.length > 0) {
@@ -346,6 +356,10 @@ const CandlestickChart: React.FC<Props> = ({
   const config = {
     responsive: true,
     displayModeBar: true,
+    // Enable scroll zoom explicitly
+    scrollZoom: true,
+    editable: false,
+    staticPlot: false,
     modeBarButtonsToAdd: [
       {
         name: 'Reset View',
@@ -366,29 +380,12 @@ const CandlestickChart: React.FC<Props> = ({
       }
     ],
     modeBarButtons: [
-      // Zoom and Pan tools
-      [{
-        name: 'zoom',
-        title: 'Zoom',
-        icon: { path: 'M1 5 A 4 4 0 0 0 5 9 L 11 15 A 1.5 1.5 0 0 0 13 13 L 7 7 A 4 4 0 0 0 5 1 Z M 5 3 A 2 2 0 1 1 5 7 A 2 2 0 1 1 5 3' },
-        click: 'zoom2d'
-      }, {
-        name: 'pan',
-        title: 'Pan',
-        icon: { path: 'M8 1l-3 3h2v3h3v-3h2l-4-4zm8 8v3h-2l3 3 3-3h-2v-3h-2zm-8 8l3-3h-2v-3h-3v3h-2l4 4zm-8-8v-3h2l-3-3-3 3h2v3h2z' },
-        click: 'pan2d'
-      }],
+      // Core zoom and pan tools
+      ['zoom2d', 'pan2d'],
       // Zoom controls
       ['zoomIn2d', 'zoomOut2d', 'autoScale2d'],
-      // Selection tools
-      [{
-        name: 'select',
-        title: 'Box Select',
-        icon: { path: 'M1 1h15v15h-15z' },
-        click: 'select2d'
-      }],
-      // View options
-      ['resetScale2d'],
+      // Selection and reset
+      ['select2d', 'resetScale2d'],
       // Download
       ['toImage']
     ],
@@ -401,9 +398,7 @@ const CandlestickChart: React.FC<Props> = ({
       scale: 2
     },
     // Enable double-click reset
-    doubleClick: 'reset+autosize',
-    // Enable scroll zoom
-    scrollZoom: true
+    doubleClick: 'reset+autosize'
   }
 
   return (
@@ -438,6 +433,14 @@ const CandlestickChart: React.FC<Props> = ({
           config={config}
           style={{ width: '100%', height: '100%' }}
           useResizeHandler={true}
+          onInitialized={(figure) => {
+            // Enable scroll zoom after initialization
+            if (plotRef.current && plotRef.current.el) {
+              plotRef.current.el.on('plotly_relayout', (eventdata: any) => {
+                // Handle zoom/pan events if needed
+              })
+            }
+          }}
         />
       </div>
     </ChartContainer>
