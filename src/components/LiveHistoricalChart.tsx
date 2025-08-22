@@ -125,24 +125,36 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     startDate.setDate(startDate.getDate() - 90)
     
     // Start from current live price if available, otherwise use recent realistic price
-    let startingPrice = livePriceHint || 117000
+    let startingPrice = livePriceHint || currentPrice || 117000
     
-    for (let i = 0; i < 90; i++) {
+    const today = new Date()
+    const daysToGenerate = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    
+    for (let i = 0; i < daysToGenerate; i++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + i)
       
-      const change = (Math.random() - 0.5) * 0.04 * startingPrice
+      // Calculate how much we need to evolve to reach current price
+      const progressRatio = i / daysToGenerate
+      const targetPrice = livePriceHint || currentPrice || 117000
+      const priceEvolution = (targetPrice - (livePriceHint || currentPrice || 117000)) * progressRatio
+      
+      const change = (Math.random() - 0.5) * 0.03 * startingPrice + priceEvolution / daysToGenerate
       const newPrice = startingPrice + change
       
-      const high = Math.max(startingPrice, newPrice) + Math.random() * 0.01 * newPrice
-      const low = Math.min(startingPrice, newPrice) - Math.random() * 0.01 * newPrice
+      const high = Math.max(startingPrice, newPrice) + Math.random() * 0.008 * newPrice
+      const low = Math.min(startingPrice, newPrice) - Math.random() * 0.008 * newPrice
+      
+      // If this is today's candle, use live price for close
+      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0]
+      const finalClose = isToday ? (currentPrice || newPrice) : newPrice
       
       data.push({
         date: date.toISOString().split('T')[0],
         open: startingPrice,
-        high,
-        low,
-        close: newPrice,
+        high: isToday ? Math.max(high, finalClose) : high,
+        low: isToday ? Math.min(low, finalClose) : low,
+        close: finalClose,
         timestamp: date.getTime()
       })
       
@@ -191,6 +203,14 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     setSelectedTimeRange(timeframe)
     setZoomLevel(1) // Reset zoom when changing timeframe
     setPanOffset(0) // Reset pan when changing timeframe
+    
+    // Refresh live price to ensure consistency
+    try {
+      const priceData = await livePriceService.getLiveBitcoinPrice()
+      setCurrentPrice(priceData.price)
+    } catch (error) {
+      console.error('Failed to refresh live price on timeframe change:', error)
+    }
     
     const data = await loadHistoricalData(timeframe)
     setCandleData(data)

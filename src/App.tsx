@@ -146,28 +146,28 @@ function App() {
     link.click()
   }
 
-  // Generate mock equity curve data
+  // Generate real equity curve data from trades
   const generateEquityData = () => {
-    const startDate = new Date('2020-01-01')
-    const endDate = new Date()
-    const data = []
-    let equity = 100000 // Starting capital
+    // Use the actual trades to create equity curve
+    const equityPoints = []
+    const startingEquity = 100000
     
-    for (let d = new Date(startDate); d <= endDate; d.setMonth(d.getMonth() + 1)) {
-      // Simulate equity growth with some volatility
-      const monthlyReturn = (Math.random() - 0.3) * 0.15 // -30% to +15% bias toward positive
-      equity = equity * (1 + monthlyReturn)
-      data.push({
-        date: new Date(d),
-        equity: equity
+    // Start with initial capital
+    equityPoints.push({
+      date: new Date('2020-01-01'),
+      equity: startingEquity
+    })
+    
+    // Add equity points from actual trades
+    allTrades.forEach(trade => {
+      equityPoints.push({
+        date: new Date(trade.date),
+        equity: trade.equity
       })
-    }
+    })
     
-    // Ensure we end close to final equity value
-    const finalRatio = mockPerformanceData.final_equity / equity
-    data.forEach(point => point.equity *= finalRatio)
-    
-    return data
+    // Sort by date to ensure proper chronological order
+    return equityPoints.sort((a, b) => a.date.getTime() - b.date.getTime())
   }
 
   const drawEquityCurve = (canvas: HTMLCanvasElement) => {
