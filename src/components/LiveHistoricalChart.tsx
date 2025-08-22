@@ -344,59 +344,81 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     })
 
-    // Draw trading boundaries (support/resistance levels)
-    if (visibleData.length > 0) {
-      const recentHigh = Math.max(...visibleData.slice(-20).map(d => d.high))
-      const recentLow = Math.min(...visibleData.slice(-20).map(d => d.low))
-      const movingAvg = visibleData.slice(-20).reduce((sum, d) => sum + d.close, 0) / Math.min(20, visibleData.length)
+    // Draw Adaptive Volatility Breakout boundaries
+    if (visibleData.length > 20) {
+      const lookbackPeriod = 20
+      const rangeMultiplier = 0.5
       
-      // Draw support line (recent low)
-      const supportY = padding + chartHeight - ((recentLow - minPrice) / priceRange) * chartHeight
-      ctx.strokeStyle = '#da3633'
-      ctx.setLineDash([5, 5])
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(padding, supportY)
-      ctx.lineTo(padding + chartWidth, supportY)
-      ctx.stroke()
+      // Calculate upper and lower boundaries for each visible candle
+      const boundaries = visibleData.map((candle, index) => {
+        if (index < lookbackPeriod) return null
+        
+        // Get lookback data (previous 20 bars)
+        const lookbackData = visibleData.slice(Math.max(0, index - lookbackPeriod), index)
+        const highestHigh = Math.max(...lookbackData.map(d => d.high))
+        const lowestLow = Math.min(...lookbackData.map(d => d.low))
+        const breakoutRange = highestHigh - lowestLow
+        
+        return {
+          upperBoundary: candle.open + breakoutRange * rangeMultiplier,
+          lowerBoundary: candle.open - breakoutRange * rangeMultiplier,
+          x: padding + (chartWidth / (visibleData.length - 1)) * index
+        }
+      })
       
-      // Support label
-      ctx.fillStyle = '#da3633'
-      ctx.font = '10px Segoe UI'
-      ctx.textAlign = 'left'
-      ctx.fillText(`Support: $${recentLow.toLocaleString()}`, padding + 10, supportY - 5)
-      
-      // Draw resistance line (recent high)
-      const resistanceY = padding + chartHeight - ((recentHigh - minPrice) / priceRange) * chartHeight
+      // Draw upper boundary line
       ctx.strokeStyle = '#238636'
       ctx.setLineDash([5, 5])
-      ctx.lineWidth = 1
+      ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.moveTo(padding, resistanceY)
-      ctx.lineTo(padding + chartWidth, resistanceY)
+      let firstPoint = true
+      boundaries.forEach(boundary => {
+        if (!boundary) return
+        const y = padding + chartHeight - ((boundary.upperBoundary - minPrice) / priceRange) * chartHeight
+        if (firstPoint) {
+          ctx.moveTo(boundary.x, y)
+          firstPoint = false
+        } else {
+          ctx.lineTo(boundary.x, y)
+        }
+      })
       ctx.stroke()
       
-      // Resistance label
-      ctx.fillStyle = '#238636'
-      ctx.font = '10px Segoe UI'
-      ctx.textAlign = 'left'
-      ctx.fillText(`Resistance: $${recentHigh.toLocaleString()}`, padding + 10, resistanceY - 5)
-      
-      // Draw moving average line
-      const movingAvgY = padding + chartHeight - ((movingAvg - minPrice) / priceRange) * chartHeight
-      ctx.strokeStyle = '#fd7e14'
-      ctx.setLineDash([3, 3])
-      ctx.lineWidth = 1
+      // Draw lower boundary line
+      ctx.strokeStyle = '#da3633'
+      ctx.setLineDash([5, 5])
+      ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.moveTo(padding, movingAvgY)
-      ctx.lineTo(padding + chartWidth, movingAvgY)
+      firstPoint = true
+      boundaries.forEach(boundary => {
+        if (!boundary) return
+        const y = padding + chartHeight - ((boundary.lowerBoundary - minPrice) / priceRange) * chartHeight
+        if (firstPoint) {
+          ctx.moveTo(boundary.x, y)
+          firstPoint = false
+        } else {
+          ctx.lineTo(boundary.x, y)
+        }
+      })
       ctx.stroke()
       
-      // Moving average label
-      ctx.fillStyle = '#fd7e14'
-      ctx.font = '10px Segoe UI'
-      ctx.textAlign = 'left'
-      ctx.fillText(`MA20: $${movingAvg.toLocaleString()}`, padding + 10, movingAvgY - 5)
+      // Draw labels for the most recent boundaries
+      const lastBoundary = boundaries[boundaries.length - 1]
+      if (lastBoundary) {
+        // Upper boundary label
+        const upperY = padding + chartHeight - ((lastBoundary.upperBoundary - minPrice) / priceRange) * chartHeight
+        ctx.fillStyle = '#238636'
+        ctx.font = 'bold 10px Segoe UI'
+        ctx.textAlign = 'right'
+        ctx.fillText(`Long Signal: $${lastBoundary.upperBoundary.toLocaleString()}`, rect.width - padding - 10, upperY - 5)
+        
+        // Lower boundary label
+        const lowerY = padding + chartHeight - ((lastBoundary.lowerBoundary - minPrice) / priceRange) * chartHeight
+        ctx.fillStyle = '#da3633'
+        ctx.font = 'bold 10px Segoe UI'
+        ctx.textAlign = 'right'
+        ctx.fillText(`Short Signal: $${lastBoundary.lowerBoundary.toLocaleString()}`, rect.width - padding - 10, lowerY + 15)
+      }
       
       // Reset line dash
       ctx.setLineDash([])

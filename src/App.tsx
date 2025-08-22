@@ -29,9 +29,235 @@ const mockPrice = {
 
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [selectedSource, setSelectedSource] = useState('coinbase')
+  const [selectedSource, setSelectedSource] = useState('bitstamp')
   const [livePrice, setLivePrice] = useState(mockPrice)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const tradesPerPage = 10
+
+  const handleRefreshData = () => {
+    setCurrentTime(new Date())
+    setRefreshKey(prev => prev + 1) // Force chart to reload data
+  }
+
+  // Generate comprehensive trades data (154 trades)
+  const generateAllTrades = () => {
+    const trades = []
+    const startDate = new Date('2020-01-01')
+    const endDate = new Date('2025-08-19')
+    let equity = 100000
+    let position = null // 'LONG' or 'SHORT'
+    let entryPrice = 0
+    let size = 0
+    
+    // Generate price movement over time
+    const days = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    let currentPrice = 7000 // Starting BTC price in 2020
+    
+    for (let i = 0; i < 154; i++) {
+      const tradeDate = new Date(startDate.getTime() + (days / 154) * i * 24 * 60 * 60 * 1000)
+      
+      // Simulate price evolution
+      const priceChange = (Math.random() - 0.5) * 0.1
+      currentPrice = currentPrice * (1 + priceChange)
+      currentPrice = Math.max(5000, Math.min(150000, currentPrice)) // Keep within realistic bounds
+      
+      if (!position) {
+        // Enter new position
+        const isLong = Math.random() > 0.5
+        position = isLong ? 'LONG' : 'SHORT'
+        entryPrice = currentPrice
+        size = equity / currentPrice * 0.95 // Use 95% of equity
+        
+        trades.push({
+          date: tradeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: `ENTRY ${position}`,
+          price: currentPrice,
+          size: size,
+          pnl: null,
+          equity: equity,
+          comment: position === 'LONG' ? 'Long Entry Signal' : 'Short Entry Signal'
+        })
+      } else {
+        // Close position and calculate P&L
+        let pnl = 0
+        if (position === 'LONG') {
+          pnl = (currentPrice - entryPrice) * size
+        } else {
+          pnl = (entryPrice - currentPrice) * size
+        }
+        
+        equity += pnl
+        
+        trades.push({
+          date: tradeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: `CLOSE ${position}`,
+          price: currentPrice,
+          size: size,
+          pnl: pnl,
+          equity: equity,
+          comment: pnl > 0 ? 'Profit Target' : 'Stop Loss'
+        })
+        
+        position = null
+      }
+    }
+    
+    // Ensure final equity matches our mock data
+    const finalEquityRatio = mockPerformanceData.final_equity / equity
+    trades.forEach(trade => {
+      trade.equity *= finalEquityRatio
+      if (trade.pnl) trade.pnl *= finalEquityRatio
+    })
+    
+    return trades.reverse() // Most recent first
+  }
+
+  const allTrades = generateAllTrades()
+  
+  // Pagination logic
+  const totalPages = Math.ceil(allTrades.length / tradesPerPage)
+  const startIndex = (currentPage - 1) * tradesPerPage
+  const endIndex = startIndex + tradesPerPage
+  const currentTrades = allTrades.slice(startIndex, endIndex)
+
+  // CSV download function
+  const downloadTradesCSV = () => {
+    const headers = ['Date', 'Action', 'Price', 'Size', 'P&L', 'Equity', 'Comment']
+    const csvContent = [
+      headers.join(','),
+      ...allTrades.map(trade => [
+        trade.date,
+        trade.action,
+        trade.price.toFixed(2),
+        trade.size.toFixed(4),
+        trade.pnl ? trade.pnl.toFixed(2) : '',
+        trade.equity.toFixed(2),
+        `"${trade.comment}"`
+      ].join(','))
+    ].join('\n')
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `btc_trades_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+  }
+
+  // Generate mock equity curve data
+  const generateEquityData = () => {
+    const startDate = new Date('2020-01-01')
+    const endDate = new Date()
+    const data = []
+    let equity = 100000 // Starting capital
+    
+    for (let d = new Date(startDate); d <= endDate; d.setMonth(d.getMonth() + 1)) {
+      // Simulate equity growth with some volatility
+      const monthlyReturn = (Math.random() - 0.3) * 0.15 // -30% to +15% bias toward positive
+      equity = equity * (1 + monthlyReturn)
+      data.push({
+        date: new Date(d),
+        equity: equity
+      })
+    }
+    
+    // Ensure we end close to final equity value
+    const finalRatio = mockPerformanceData.final_equity / equity
+    data.forEach(point => point.equity *= finalRatio)
+    
+    return data
+  }
+
+  const drawEquityCurve = (canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * 2
+    canvas.height = rect.height * 2
+    ctx.scale(2, 2)
+
+    // Clear canvas
+    ctx.fillStyle = '#161b22'
+    ctx.fillRect(0, 0, rect.width, rect.height)
+
+    const equityData = generateEquityData()
+    const padding = 50
+    const chartWidth = rect.width - padding * 2
+    const chartHeight = rect.height - padding * 2
+
+    // Find min/max equity values
+    const equityValues = equityData.map(d => d.equity)
+    const minEquity = Math.min(...equityValues) * 0.95
+    const maxEquity = Math.max(...equityValues) * 1.05
+
+    // Draw grid lines
+    ctx.strokeStyle = '#30363d'
+    ctx.lineWidth = 0.5
+    
+    // Horizontal grid lines
+    for (let i = 0; i <= 5; i++) {
+      const y = padding + (chartHeight / 5) * i
+      ctx.beginPath()
+      ctx.moveTo(padding, y)
+      ctx.lineTo(padding + chartWidth, y)
+      ctx.stroke()
+      
+      // Equity labels
+      const equityValue = maxEquity - ((maxEquity - minEquity) / 5) * i
+      ctx.fillStyle = '#7d8590'
+      ctx.font = '10px Segoe UI'
+      ctx.textAlign = 'right'
+      ctx.fillText(`$${(equityValue / 1000000).toFixed(1)}M`, padding - 10, y + 3)
+    }
+
+    // Draw equity curve
+    ctx.strokeStyle = '#238636'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    
+    equityData.forEach((point, index) => {
+      const x = padding + (chartWidth / (equityData.length - 1)) * index
+      const y = padding + chartHeight - ((point.equity - minEquity) / (maxEquity - minEquity)) * chartHeight
+      
+      if (index === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    })
+    
+    ctx.stroke()
+
+    // Add fill under curve
+    ctx.lineTo(padding + chartWidth, padding + chartHeight)
+    ctx.lineTo(padding, padding + chartHeight)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(35, 134, 54, 0.1)'
+    ctx.fill()
+
+    // Draw date labels
+    ctx.fillStyle = '#7d8590'
+    ctx.font = '10px Segoe UI'
+    ctx.textAlign = 'center'
+    const dateStep = Math.max(1, Math.floor(equityData.length / 6))
+    for (let i = 0; i < equityData.length; i += dateStep) {
+      const x = padding + (chartWidth / (equityData.length - 1)) * i
+      const date = equityData[i].date
+      ctx.fillText(
+        date.toLocaleDateString('en-US', { year: '2-digit', month: 'short' }),
+        x,
+        rect.height - 10
+      )
+    }
+
+    // Add title
+    ctx.fillStyle = '#f0f6fc'
+    ctx.font = 'bold 12px Segoe UI'
+    ctx.textAlign = 'left'
+    ctx.fillText('Portfolio Equity Growth', padding, 20)
+  }
 
   // Update time every second
   useEffect(() => {
@@ -107,6 +333,7 @@ function App() {
           </select>
           
           <button
+            onClick={handleRefreshData}
             style={{
               padding: '0.5rem 1rem',
               border: 'none',
@@ -120,7 +347,7 @@ function App() {
           </button>
 
           <div style={{ marginLeft: 'auto', fontSize: '0.9rem', color: '#7d8590' }}>
-            Last updated: {currentTime.toLocaleString()}
+            Selected: {selectedSource.toUpperCase()} | Last updated: {currentTime.toLocaleString()}
           </div>
         </div>
 
@@ -253,7 +480,7 @@ function App() {
         }}>
           <div>
             <div style={{ fontSize: '0.9rem', color: '#7d8590', marginBottom: '0.25rem' }}>
-              Bitcoin - COINBASE
+              Bitcoin - {selectedSource.toUpperCase()}
             </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f0f6fc' }}>
               ${livePrice.price.toLocaleString()}
@@ -285,7 +512,7 @@ function App() {
             marginBottom: '1rem'
           }}>
             <h3 style={{ margin: 0, color: '#f0f6fc' }}>
-              Bitcoin (BTC/USD) - COINBASE
+              Bitcoin (BTC/USD) - {selectedSource.toUpperCase()}
             </h3>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               {['1M', '3M', '6M', 'YTD', '1Y', 'All'].map(period => (
@@ -309,6 +536,7 @@ function App() {
           
           <div style={{ position: 'relative' }}>
             <LiveHistoricalChart 
+              key={refreshKey}
               height={400}
               source={selectedSource}
               tradeSignals={[
@@ -469,12 +697,53 @@ function App() {
                     </div>
                   </div>
                 </div>
+                
+                {/* Equity Curve Chart */}
+                <div style={{ marginTop: '2rem' }}>
+                  <h4 style={{ color: '#f0f6fc', marginBottom: '1rem' }}>Equity Curve Over Time</h4>
+                  <div style={{
+                    backgroundColor: '#161b22',
+                    border: '1px solid #30363d',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    height: '300px',
+                    position: 'relative'
+                  }}>
+                    <canvas 
+                      ref={(canvas) => {
+                        if (canvas) drawEquityCurve(canvas)
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'block'
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
             {activeTab === 'trades' && (
               <div>
-                <h3 style={{ marginBottom: '1rem', color: '#f0f6fc' }}>Trade History (154 trades)</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0, color: '#f0f6fc' }}>Trade History ({allTrades.length} trades)</h3>
+                  <button
+                    onClick={downloadTradesCSV}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      border: 'none',
+                      borderRadius: '4px',
+                      backgroundColor: '#238636',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    📥 Download CSV
+                  </button>
+                </div>
+                
                 <div style={{ fontSize: '0.9rem' }}>
                   <div style={{ 
                     display: 'grid', 
@@ -496,11 +765,7 @@ function App() {
                     <div>Comment</div>
                   </div>
                   
-                  {[
-                    { date: 'Aug 19, 2025', action: 'CLOSE Final', price: 112831.18, size: 608.4206, pnl: 3363591.633, equity: 75962736.971, comment: 'End of Date Range' },
-                    { date: 'Aug 14, 2025', action: 'ENTRY SHORT', price: 118359.578, size: 608.4206, pnl: null, equity: 72667794.155, comment: 'Short' },
-                    { date: 'Aug 14, 2025', action: 'CLOSE Long', price: 118359.578, size: 611.2963, pnl: 21875618.378, equity: 72739806.563, comment: 'Reverse to Short' }
-                  ].map((trade, index) => (
+                  {currentTrades.map((trade, index) => (
                     <div key={index} style={{ 
                       display: 'grid', 
                       gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr 1fr 2fr',
@@ -520,14 +785,81 @@ function App() {
                       <div>${trade.price.toLocaleString()}</div>
                       <div>{trade.size.toFixed(4)}</div>
                       <div style={{ 
-                        color: trade.pnl && trade.pnl > 0 ? '#238636' : '#da3633' 
+                        color: trade.pnl && trade.pnl > 0 ? '#238636' : trade.pnl && trade.pnl < 0 ? '#da3633' : '#7d8590'
                       }}>
-                        {trade.pnl ? `+$${trade.pnl.toLocaleString()}` : '-'}
+                        {trade.pnl ? `${trade.pnl > 0 ? '+' : ''}$${trade.pnl.toLocaleString()}` : '-'}
                       </div>
                       <div>${trade.equity.toLocaleString()}</div>
                       <div>{trade.comment}</div>
                     </div>
                   ))}
+                </div>
+                
+                {/* Pagination Controls */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginTop: '1rem',
+                  padding: '1rem 0'
+                }}>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      border: '1px solid #30363d',
+                      borderRadius: '4px',
+                      backgroundColor: currentPage === 1 ? '#161b22' : '#21262d',
+                      color: currentPage === 1 ? '#7d8590' : '#f0f6fc',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    ← Previous
+                  </button>
+                  
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            border: '1px solid #30363d',
+                            borderRadius: '4px',
+                            backgroundColor: currentPage === pageNum ? '#2f81f7' : '#21262d',
+                            color: currentPage === pageNum ? 'white' : '#f0f6fc',
+                            cursor: 'pointer',
+                            fontWeight: currentPage === pageNum ? 'bold' : 'normal'
+                          }}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      border: '1px solid #30363d',
+                      borderRadius: '4px',
+                      backgroundColor: currentPage === totalPages ? '#161b22' : '#21262d',
+                      color: currentPage === totalPages ? '#7d8590' : '#f0f6fc',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Next →
+                  </button>
+                  
+                  <div style={{ marginLeft: '1rem', color: '#7d8590', fontSize: '0.9rem' }}>
+                    Page {currentPage} of {totalPages} | Showing {startIndex + 1}-{Math.min(endIndex, allTrades.length)} of {allTrades.length} trades
+                  </div>
                 </div>
               </div>
             )}
