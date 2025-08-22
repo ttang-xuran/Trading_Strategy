@@ -328,14 +328,12 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     }
 
-    // Calculate proper candlestick width for daily data
-    const minCandleWidth = 8 // Minimum width for daily candles
-    const idealCandleWidth = 12 // Ideal width for daily candles
-    const availableWidth = chartWidth / visibleData.length
-    const candleWidth = Math.max(minCandleWidth, Math.min(idealCandleWidth, availableWidth - 2))
+    // Calculate proper candlestick width for daily data  
+    const candleSpacing = chartWidth / visibleData.length
+    const candleWidth = Math.max(6, candleSpacing * 0.8) // Use 80% of available space for candle width
     
     visibleData.forEach((candle, index) => {
-      const x = padding + (chartWidth / visibleData.length) * index + (availableWidth / 2)
+      const x = padding + candleSpacing * index + candleSpacing / 2
       const openY = padding + chartHeight - ((candle.open - minPrice) / priceRange) * chartHeight
       const closeY = padding + chartHeight - ((candle.close - minPrice) / priceRange) * chartHeight
       const highY = padding + chartHeight - ((candle.high - minPrice) / priceRange) * chartHeight
