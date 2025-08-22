@@ -134,6 +134,148 @@ class LivePriceService {
   }
 
   /**
+   * Get real historical OHLC data from specific source
+   */
+  async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
+    try {
+      switch (source.toLowerCase()) {
+        case 'coinbase':
+          return await this.fetchCoinbaseHistorical(days)
+        case 'bitstamp':
+          return await this.fetchBitstampHistorical(days)
+        case 'binance':
+          return await this.fetchBinanceHistorical(days)
+        case 'coingecko':
+          return await this.fetchCoinGeckoHistorical(days)
+        default:
+          console.log(`Unknown source: ${source}, falling back to CoinGecko`)
+          return await this.fetchCoinGeckoHistorical(days)
+      }
+    } catch (error) {
+      console.error(`Failed to fetch historical data from ${source}:`, error)
+      throw error
+    }
+  }
+
+  private async fetchCoinbaseHistorical(days: number): Promise<any[]> {
+    // Coinbase Pro API for historical candles
+    const endTime = new Date()
+    const startTime = new Date()
+    startTime.setDate(startTime.getDate() - days)
+    
+    const response = await fetch(
+      `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startTime.toISOString()}&end=${endTime.toISOString()}&granularity=86400`
+    )
+    
+    if (!response.ok) throw new Error('Coinbase historical API failed')
+    
+    const data = await response.json()
+    
+    // Convert Coinbase format [timestamp, low, high, open, close, volume] to our format
+    return data.map((candle: number[]) => ({
+      date: new Date(candle[0] * 1000),
+      open: candle[3],
+      high: candle[2], 
+      low: candle[1],
+      close: candle[4],
+      timestamp: candle[0] * 1000
+    })).sort((a: any, b: any) => a.timestamp - b.timestamp)
+  }
+
+  private async fetchBitstampHistorical(days: number): Promise<any[]> {
+    // Bitstamp OHLC API
+    const step = 86400 // Daily candles
+    const limit = Math.min(days, 1000) // API limit
+    
+    const response = await fetch(
+      `https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=${step}&limit=${limit}`
+    )
+    
+    if (!response.ok) throw new Error('Bitstamp historical API failed')
+    
+    const data = await response.json()
+    
+    return data.data.ohlc.map((candle: any) => ({
+      date: new Date(parseInt(candle.timestamp) * 1000),
+      open: parseFloat(candle.open),
+      high: parseFloat(candle.high),
+      low: parseFloat(candle.low), 
+      close: parseFloat(candle.close),
+      timestamp: parseInt(candle.timestamp) * 1000
+    })).sort((a: any, b: any) => a.timestamp - b.timestamp)
+  }
+
+  private async fetchBinanceHistorical(days: number): Promise<any[]> {
+    // Binance klines API
+    const endTime = Date.now()
+    const startTime = endTime - (days * 24 * 60 * 60 * 1000)
+    const limit = Math.min(days, 1000) // API limit
+    
+    const response = await fetch(
+      `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime=${startTime}&endTime=${endTime}&limit=${limit}`
+    )
+    
+    if (!response.ok) throw new Error('Binance historical API failed')
+    
+    const data = await response.json()
+    
+    // Convert Binance format to our format
+    return data.map((candle: any[]) => ({
+      date: new Date(candle[0]),
+      open: parseFloat(candle[1]),
+      high: parseFloat(candle[2]),
+      low: parseFloat(candle[3]),
+      close: parseFloat(candle[4]),
+      timestamp: candle[0]
+    })).sort((a: any, b: any) => a.timestamp - b.timestamp)
+  }
+
+  private async fetchCoinGeckoHistorical(days: number): Promise<any[]> {
+    // CoinGecko historical prices (limited to avoid rate limits)
+    const limitedDays = Math.min(days, 30) // Reduce to avoid rate limits
+    
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${limitedDays}&interval=daily`
+    )
+    
+    if (!response.ok) throw new Error('CoinGecko historical API failed')
+    
+    const data = await response.json()
+    const prices = data.prices || []
+    
+    // Convert to daily OHLC (CoinGecko only gives price points, so we approximate)
+    const dailyData: { [key: string]: { prices: number[], timestamps: number[] } } = {}
+    
+    prices.forEach(([timestamp, price]: [number, number]) => {
+      const date = new Date(timestamp).toISOString().split('T')[0]
+      if (!dailyData[date]) {
+        dailyData[date] = { prices: [], timestamps: [] }
+      }
+      dailyData[date].prices.push(price)
+      dailyData[date].timestamps.push(timestamp)
+    })
+    
+    return Object.entries(dailyData)
+      .map(([date, dayData]) => {
+        const prices = dayData.prices
+        const open = prices[0]
+        const close = prices[prices.length - 1]
+        const high = Math.max(...prices)
+        const low = Math.min(...prices)
+        
+        return {
+          date: new Date(date),
+          open,
+          high,
+          low,
+          close,
+          timestamp: dayData.timestamps[0]
+        }
+      })
+      .sort((a, b) => a.timestamp - b.timestamp)
+  }
+
+  /**
    * Calculate unrealized P&L for open position
    */
   calculateUnrealizedPnL(

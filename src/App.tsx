@@ -78,50 +78,20 @@ function App() {
     setRefreshKey(prev => prev + 1) // Force chart to reload data
   }
 
-  // Generate real strategy trades using working historical data approach
+  // Generate real strategy trades using actual historical market data
   const generateAllTrades = async (source: string = 'coinbase') => {
     console.log(`Generating strategy trades for source: ${source}`)
     
     try {
-      // Get current live price from selected source to anchor historical simulation
-      const liveData = await livePriceService.getLiveBitcoinPrice(source)
-      const currentPrice = liveData.price
+      // Get REAL historical OHLC data from the selected exchange
+      console.log(`Fetching real historical data from ${source}...`)
+      const ohlcData = await livePriceService.getHistoricalData(source, 90)
       
-      console.log(`Using current price: $${currentPrice}`)
+      console.log(`Received ${ohlcData.length} days of REAL ${source} OHLC data`)
       
-      // Generate realistic historical OHLC data working backwards from current price
-      const ohlcData = []
-      const daysToGenerate = 90
-      let price = currentPrice
-      
-      for (let i = 0; i < daysToGenerate; i++) {
-        const date = new Date()
-        date.setDate(date.getDate() - (daysToGenerate - 1 - i))
-        
-        // Realistic daily volatility (1-3%)
-        const dailyChange = (Math.random() - 0.5) * 0.06 * price // ±3% daily moves
-        const newPrice = Math.max(price + dailyChange, price * 0.95) // Never drop more than 5% in one day
-        
-        // Generate OHLC for the day
-        const open = price
-        const close = newPrice
-        const volatilityRange = price * (0.005 + Math.random() * 0.015) // 0.5-2% intraday range
-        const high = Math.max(open, close) + volatilityRange * Math.random()
-        const low = Math.min(open, close) - volatilityRange * Math.random()
-        
-        ohlcData.push({
-          date,
-          open,
-          high,
-          low, 
-          close,
-          timestamp: date.getTime()
-        })
-        
-        price = newPrice
+      if (ohlcData.length === 0) {
+        throw new Error(`No historical data received from ${source}`)
       }
-      
-      console.log(`Generated ${ohlcData.length} days of OHLC data`)
       
       // Apply Adaptive Volatility Breakout Strategy
       const lookbackPeriod = 20
@@ -262,27 +232,27 @@ function App() {
   }
 
   const [allTrades, setAllTrades] = useState<any[]>([])
-  const [tradesLoading, setTradesLoading] = useState(true)
+  const [tradesLoading, setTradesLoading] = useState(false)
+  const [backtestCompleted, setBacktestCompleted] = useState(false)
   
-  // Load real strategy trades on component mount and when source changes
-  useEffect(() => {
-    const loadTrades = async () => {
-      setTradesLoading(true)
-      try {
-        console.log('Starting trade loading...')
-        const trades = await generateAllTrades(selectedSource)
-        console.log('Trades loaded:', trades.length)
-        setAllTrades(trades)
-      } catch (error) {
-        console.error('Failed to load trades:', error)
-        setAllTrades([])
-      } finally {
-        setTradesLoading(false)
-      }
+  // Manual backtest function - only runs when user clicks button
+  const runBacktest = async () => {
+    setTradesLoading(true)
+    setBacktestCompleted(false)
+    try {
+      console.log('Starting backtest for source:', selectedSource)
+      const trades = await generateAllTrades(selectedSource)
+      console.log('Backtest completed:', trades.length, 'trades')
+      setAllTrades(trades)
+      setBacktestCompleted(true)
+    } catch (error) {
+      console.error('Failed to run backtest:', error)
+      setAllTrades([])
+      alert(`Failed to run backtest: ${error.message}`)
+    } finally {
+      setTradesLoading(false)
     }
-    
-    loadTrades()
-  }, [selectedSource])
+  }
   
   // Calculate real performance metrics from trades
   const performanceData = calculatePerformanceData(allTrades)
@@ -525,6 +495,23 @@ function App() {
           </select>
           
           <button
+            onClick={runBacktest}
+            disabled={tradesLoading}
+            style={{
+              padding: '0.5rem 1rem',
+              border: 'none',
+              borderRadius: '4px',
+              backgroundColor: tradesLoading ? '#6c757d' : '#238636',
+              color: 'white',
+              cursor: tradesLoading ? 'not-allowed' : 'pointer',
+              marginLeft: '0.5rem',
+              fontWeight: 'bold'
+            }}
+          >
+            {tradesLoading ? '⏳ Running...' : '🚀 Run Backtest'}
+          </button>
+          
+          <button
             onClick={handleRefreshData}
             style={{
               padding: '0.5rem 1rem',
@@ -532,7 +519,8 @@ function App() {
               borderRadius: '4px',
               backgroundColor: '#2f81f7',
               color: 'white',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              marginLeft: '0.5rem'
             }}
           >
             Refresh Data
@@ -919,7 +907,9 @@ function App() {
             {activeTab === 'trades' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h3 style={{ margin: 0, color: '#f0f6fc' }}>Trade History ({allTrades.length} trades)</h3>
+                  <h3 style={{ margin: 0, color: '#f0f6fc' }}>
+                    Trade History {backtestCompleted ? `(${allTrades.length} trades)` : '(No backtest run)'}
+                  </h3>
                   <button
                     onClick={downloadTradesCSV}
                     style={{
@@ -964,9 +954,21 @@ function App() {
                       color: '#7d8590'
                     }}>
                       <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚡</div>
-                      <div>Loading real market data and calculating strategy trades...</div>
+                      <div>Running backtest with real {selectedSource.toUpperCase()} market data...</div>
                       <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                        Applying Adaptive Volatility Breakout algorithm to 2020-2024 Bitcoin data
+                        Fetching historical prices and applying Adaptive Volatility Breakout strategy
+                      </div>
+                    </div>
+                  ) : !backtestCompleted ? (
+                    <div style={{ 
+                      padding: '2rem',
+                      textAlign: 'center',
+                      color: '#7d8590'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📊</div>
+                      <div>Ready to run backtest</div>
+                      <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                        Click "🚀 Run Backtest" above to analyze {selectedSource.toUpperCase()} historical data
                       </div>
                     </div>
                   ) : currentTrades.map((trade, index) => (
