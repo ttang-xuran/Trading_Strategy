@@ -23,6 +23,8 @@ interface Props {
   source: string
 }
 
+type TimeRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'All'
+
 export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -32,15 +34,34 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   const [candleData, setCandleData] = useState<CandleData[]>([])
   const [currentPrice, setCurrentPrice] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('6M')
+  const [allHistoricalData, setAllHistoricalData] = useState<CandleData[]>([])
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Get number of days for each timeframe
+  const getTimeframeDays = (timeframe: TimeRange): number => {
+    switch (timeframe) {
+      case '1M': return 30
+      case '3M': return 90
+      case '6M': return 180
+      case 'YTD': 
+        const yearStart = new Date(new Date().getFullYear(), 0, 1)
+        return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
+      case '1Y': return 365
+      case 'All': return 1000 // Max available
+      default: return 180
+    }
+  }
 
   // Load historical data from live API
-  const loadHistoricalData = async (): Promise<CandleData[]> => {
+  const loadHistoricalData = async (timeframe: TimeRange = '6M'): Promise<CandleData[]> => {
     try {
       setLoading(true)
       
-      // Get 90 days of historical data using CoinGecko API
+      // Get historical data based on timeframe
+      const days = getTimeframeDays(timeframe)
       const endTime = Math.floor(Date.now() / 1000)
-      const startTime = endTime - (90 * 24 * 60 * 60) // 90 days ago
+      const startTime = endTime - (days * 24 * 60 * 60)
       
       const response = await fetch(
         `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${startTime}&to=${endTime}`
@@ -163,10 +184,24 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     })
   }
 
-  // Load data when source changes
+  // Handle timeframe changes
+  const handleTimeframeChange = async (timeframe: TimeRange) => {
+    setSelectedTimeRange(timeframe)
+    setZoomLevel(1) // Reset zoom when changing timeframe
+    setPanOffset(0) // Reset pan when changing timeframe
+    
+    const data = await loadHistoricalData(timeframe)
+    setCandleData(data)
+    setAllHistoricalData(data)
+  }
+
+  // Load data when source or timeframe changes
   useEffect(() => {
-    loadHistoricalData().then(setCandleData)
-  }, [source])
+    loadHistoricalData(selectedTimeRange).then(data => {
+      setCandleData(data)
+      setAllHistoricalData(data)
+    })
+  }, [source, selectedTimeRange])
 
   // Update live price and current candle
   useEffect(() => {
@@ -309,6 +344,64 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     })
 
+    // Draw trading boundaries (support/resistance levels)
+    if (visibleData.length > 0) {
+      const recentHigh = Math.max(...visibleData.slice(-20).map(d => d.high))
+      const recentLow = Math.min(...visibleData.slice(-20).map(d => d.low))
+      const movingAvg = visibleData.slice(-20).reduce((sum, d) => sum + d.close, 0) / Math.min(20, visibleData.length)
+      
+      // Draw support line (recent low)
+      const supportY = padding + chartHeight - ((recentLow - minPrice) / priceRange) * chartHeight
+      ctx.strokeStyle = '#da3633'
+      ctx.setLineDash([5, 5])
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(padding, supportY)
+      ctx.lineTo(padding + chartWidth, supportY)
+      ctx.stroke()
+      
+      // Support label
+      ctx.fillStyle = '#da3633'
+      ctx.font = '10px Segoe UI'
+      ctx.textAlign = 'left'
+      ctx.fillText(`Support: $${recentLow.toLocaleString()}`, padding + 10, supportY - 5)
+      
+      // Draw resistance line (recent high)
+      const resistanceY = padding + chartHeight - ((recentHigh - minPrice) / priceRange) * chartHeight
+      ctx.strokeStyle = '#238636'
+      ctx.setLineDash([5, 5])
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(padding, resistanceY)
+      ctx.lineTo(padding + chartWidth, resistanceY)
+      ctx.stroke()
+      
+      // Resistance label
+      ctx.fillStyle = '#238636'
+      ctx.font = '10px Segoe UI'
+      ctx.textAlign = 'left'
+      ctx.fillText(`Resistance: $${recentHigh.toLocaleString()}`, padding + 10, resistanceY - 5)
+      
+      // Draw moving average line
+      const movingAvgY = padding + chartHeight - ((movingAvg - minPrice) / priceRange) * chartHeight
+      ctx.strokeStyle = '#fd7e14'
+      ctx.setLineDash([3, 3])
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(padding, movingAvgY)
+      ctx.lineTo(padding + chartWidth, movingAvgY)
+      ctx.stroke()
+      
+      // Moving average label
+      ctx.fillStyle = '#fd7e14'
+      ctx.font = '10px Segoe UI'
+      ctx.textAlign = 'left'
+      ctx.fillText(`MA20: $${movingAvg.toLocaleString()}`, padding + 10, movingAvgY - 5)
+      
+      // Reset line dash
+      ctx.setLineDash([])
+    }
+
     // Draw trade signals (only visible ones)
     tradeSignals.forEach(signal => {
       const signalIndex = visibleData.findIndex(c => c.date === signal.date)
@@ -375,19 +468,22 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   // Mouse event handlers for zoom and pan
   const handleWheel = (event: WheelEvent) => {
     event.preventDefault()
+    event.stopPropagation()
     const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1
     setZoomLevel(prev => Math.max(0.5, Math.min(10, prev * zoomFactor)))
   }
 
-  const handleMouseDown = (event: MouseEvent) => {
+  const handleMouseDown = (event: React.MouseEvent) => {
+    event.preventDefault()
     setIsDragging(true)
     setLastMouseX(event.clientX)
   }
 
-  const handleMouseMove = (event: MouseEvent) => {
+  const handleMouseMove = (event: React.MouseEvent) => {
     if (!isDragging) return
+    event.preventDefault()
     const deltaX = event.clientX - lastMouseX
-    const panSensitivity = candleData.length / 500
+    const panSensitivity = candleData.length / 1000
     setPanOffset(prev => Math.max(0, Math.min(
       candleData.length - Math.floor(candleData.length / zoomLevel),
       prev - deltaX * panSensitivity
@@ -395,7 +491,12 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     setLastMouseX(event.clientX)
   }
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (event: React.MouseEvent) => {
+    event.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleMouseLeave = () => {
     setIsDragging(false)
   }
 
@@ -403,20 +504,12 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const canvas = canvasRef.current
     if (!canvas) return
 
-    canvas.addEventListener('wheel', handleWheel)
-    canvas.addEventListener('mousedown', handleMouseDown)
-    canvas.addEventListener('mousemove', handleMouseMove)
-    canvas.addEventListener('mouseup', handleMouseUp)
-    canvas.addEventListener('mouseleave', handleMouseUp)
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
 
     return () => {
       canvas.removeEventListener('wheel', handleWheel)
-      canvas.removeEventListener('mousedown', handleMouseDown)
-      canvas.removeEventListener('mousemove', handleMouseMove)
-      canvas.removeEventListener('mouseup', handleMouseUp)
-      canvas.removeEventListener('mouseleave', handleMouseUp)
     }
-  }, [isDragging, lastMouseX, zoomLevel, candleData.length])
+  }, [zoomLevel])
 
   useEffect(() => {
     drawChart()
@@ -431,23 +524,62 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   }, [candleData, zoomLevel, panOffset, currentPrice])
 
   return (
-    <div style={{ 
-      height: `${height}px`, 
-      backgroundColor: '#0d1117',
-      borderRadius: '8px',
-      border: '1px solid #30363d',
-      position: 'relative',
-      overflow: 'hidden',
-      cursor: isDragging ? 'grabbing' : 'grab'
-    }}>
-      <canvas 
-        ref={canvasRef}
-        style={{ 
-          width: '100%', 
-          height: '100%',
-          display: 'block'
-        }}
-      />
+    <div 
+      ref={containerRef}
+      style={{ 
+        backgroundColor: '#0d1117',
+        borderRadius: '8px',
+        border: '1px solid #30363d',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Timeframe Buttons */}
+      <div style={{
+        position: 'absolute',
+        top: '10px',
+        right: '10px',
+        display: 'flex',
+        gap: '4px',
+        zIndex: 10
+      }}>
+        {(['1M', '3M', '6M', 'YTD', '1Y', 'All'] as TimeRange[]).map(timeframe => (
+          <button
+            key={timeframe}
+            onClick={() => handleTimeframeChange(timeframe)}
+            style={{
+              padding: '4px 8px',
+              fontSize: '11px',
+              border: '1px solid #30363d',
+              backgroundColor: selectedTimeRange === timeframe ? '#2f81f7' : 'rgba(22, 27, 34, 0.8)',
+              color: selectedTimeRange === timeframe ? 'white' : '#7d8590',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: selectedTimeRange === timeframe ? 'bold' : 'normal'
+            }}
+          >
+            {timeframe}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ 
+        height: `${height}px`,
+        cursor: isDragging ? 'grabbing' : 'grab'
+      }}>
+        <canvas 
+          ref={canvasRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'block'
+          }}
+        />
+      </div>
       
       {/* Controls Info */}
       <div style={{
