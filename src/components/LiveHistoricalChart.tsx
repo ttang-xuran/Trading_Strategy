@@ -266,8 +266,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const chartHeight = rect.height - padding * 2
 
     // Calculate visible data range based on zoom and pan
-    // Show a reasonable number of daily candles (30-60 days visible at once)
-    const maxVisibleCandles = 60 // Maximum daily candles to show at once
+    // Show fewer candles to make them wider and more readable
+    const maxVisibleCandles = 30 // Reduced to show fewer candles at once for better visibility
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
     const startIndex = Math.max(0, Math.min(
@@ -328,9 +328,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     }
 
-    // Calculate proper candlestick width for daily data  
+    // Calculate proper candlestick width for daily data - make them thicker and more visible
     const candleSpacing = chartWidth / visibleData.length
-    const candleWidth = Math.max(6, candleSpacing * 0.8) // Use 80% of available space for candle width
+    const candleWidth = Math.max(12, Math.min(20, candleSpacing * 0.7)) // Minimum 12px width, maximum 20px
     
     visibleData.forEach((candle, index) => {
       const x = padding + candleSpacing * index + candleSpacing / 2
@@ -350,19 +350,26 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         ctx.shadowBlur = 8
       }
 
-      // Draw wick (high-low line)
+      // Draw wick (high-low line) - make it thicker
       ctx.strokeStyle = color
-      ctx.lineWidth = isToday ? 2 : 1
+      ctx.lineWidth = isToday ? 3 : 2
       ctx.beginPath()
       ctx.moveTo(x, highY)
       ctx.lineTo(x, lowY)
       ctx.stroke()
 
-      // Draw body (open-close rectangle)
+      // Draw body (open-close rectangle) - ensure minimum height for visibility
       ctx.fillStyle = color
       const bodyTop = Math.min(openY, closeY)
-      const bodyHeight = Math.abs(closeY - openY) || 1
+      const bodyHeight = Math.max(3, Math.abs(closeY - openY)) // Minimum 3px height
+      
+      // Draw thick rectangle for the candlestick body
       ctx.fillRect(x - candleWidth/2, bodyTop, candleWidth, bodyHeight)
+      
+      // Add border for better definition
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1
+      ctx.strokeRect(x - candleWidth/2, bodyTop, candleWidth, bodyHeight)
       
       // Reset shadow
       if (isToday) {
