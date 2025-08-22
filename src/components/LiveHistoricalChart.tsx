@@ -266,7 +266,10 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const chartHeight = rect.height - padding * 2
 
     // Calculate visible data range based on zoom and pan
-    const visibleCandles = Math.floor(candleData.length / zoomLevel)
+    // Show a reasonable number of daily candles (30-60 days visible at once)
+    const maxVisibleCandles = 60 // Maximum daily candles to show at once
+    const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
+    const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
     const startIndex = Math.max(0, Math.min(
       candleData.length - visibleCandles,
       Math.floor(panOffset)
@@ -276,40 +279,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
 
     if (visibleData.length === 0) return
 
-    // Calculate display data first for proper aggregation
-    const minCandleWidth = 6 // Minimum width for visibility
-    const maxCandlesVisible = Math.floor(chartWidth / minCandleWidth)
-    
-    // If we have too many candles, we need to sample or aggregate them
-    let displayData = visibleData
-    
-    // For timeframes with too much data, aggregate into weekly candles
-    if (visibleData.length > maxCandlesVisible && selectedTimeRange === '6M') {
-      // Aggregate daily data into weekly data for better visibility
-      const weeklyData = []
-      for (let i = 0; i < visibleData.length; i += 7) {
-        const weekData = visibleData.slice(i, i + 7)
-        if (weekData.length > 0) {
-          const open = weekData[0].open
-          const close = weekData[weekData.length - 1].close
-          const high = Math.max(...weekData.map(d => d.high))
-          const low = Math.min(...weekData.map(d => d.low))
-          
-          weeklyData.push({
-            ...weekData[0],
-            open,
-            high,
-            low,
-            close,
-            date: weekData[0].date // Use first day of week
-          })
-        }
-      }
-      displayData = weeklyData
-    }
-
-    // Find price range for display data
-    const prices = displayData.flatMap(d => [d.high, d.low])
+    // Find price range for visible data
+    const prices = visibleData.flatMap(d => [d.high, d.low])
     const minPrice = Math.min(...prices) * 0.995
     const maxPrice = Math.max(...prices) * 1.005
     const priceRange = maxPrice - minPrice
@@ -357,11 +328,14 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     }
 
-    // Calculate candleWidth based on display data
-    const candleWidth = Math.max(minCandleWidth, (chartWidth / displayData.length) - 2)
+    // Calculate proper candlestick width for daily data
+    const minCandleWidth = 8 // Minimum width for daily candles
+    const idealCandleWidth = 12 // Ideal width for daily candles
+    const availableWidth = chartWidth / visibleData.length
+    const candleWidth = Math.max(minCandleWidth, Math.min(idealCandleWidth, availableWidth - 2))
     
-    displayData.forEach((candle, index) => {
-      const x = padding + (chartWidth / (displayData.length - 1)) * index
+    visibleData.forEach((candle, index) => {
+      const x = padding + (chartWidth / visibleData.length) * index + (availableWidth / 2)
       const openY = padding + chartHeight - ((candle.open - minPrice) / priceRange) * chartHeight
       const closeY = padding + chartHeight - ((candle.close - minPrice) / priceRange) * chartHeight
       const highY = padding + chartHeight - ((candle.high - minPrice) / priceRange) * chartHeight
