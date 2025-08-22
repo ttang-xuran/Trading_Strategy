@@ -42,109 +42,289 @@ function App() {
     setRefreshKey(prev => prev + 1) // Force chart to reload data
   }
 
-  // Generate realistic Adaptive Volatility Breakout strategy trades to match performance metrics
-  // Target: 75862% return, 24.68% win rate (38 wins, 116 losses), Max DD: -48.24%
-  const generateAllTrades = () => {
-    // Predefined pattern that creates actual strategy performance
-    // Most trades are small losses, but winners are massive breakout gains
-    const tradeOutcomes = [
-      // Pattern: L = small loss, W = big win, WW = massive win
-      'L', 'L', 'L', 'W', 'L', 'L', 'L', 'L', 'WW', 'L', 'L', 'L', 'L', 'L', 'W', 'L', 'L', 'L', 'L', 'L',
-      'L', 'L', 'W', 'L', 'L', 'L', 'L', 'L', 'L', 'WW', 'L', 'L', 'L', 'L', 'L', 'L', 'W', 'L', 'L', 'L',
-      'L', 'L', 'L', 'L', 'L', 'W', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'WW', 'L', 'L', 'L', 'L', 'L', 'L',
-      'W', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'W', 'L', 'L', 'L', 'L', 'L', 'L'
-    ]
-    
-    // Position pattern (true = long, false = short)
-    const longShortPattern = [
-      true, false, true, true, false, true, false, false, true, false,
-      true, false, true, false, true, true, false, true, false, true,
-      false, true, false, true, true, false, false, true, false, true,
-      true, false, true, false, false, true, false, true, true, false,
-      true, true, false, false, true, false, true, false, true, false,
-      true, false, true, true, false, false, true, false, true, true,
-      false, true, false, false, true, true, false, true, false, true,
-      false, true, false, true, true, false, true, false
-    ]
-    
+  // Apply real Adaptive Volatility Breakout strategy to historical Bitcoin data
+  const generateAllTrades = async () => {
     const trades = []
-    const startDate = new Date('2020-01-01')
-    const endDate = new Date('2025-08-19')
-    let equity = 100000
-    let position = null // 'LONG' or 'SHORT'
-    let entryPrice = 0
-    let size = 0
-    let tradeIndex = 0
-    let currentPrice = 7000 // Starting BTC price in 2020
     
-    // Generate realistic price evolution
-    const days = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    
-    for (let i = 0; i < 154; i++) {
-      const tradeDate = new Date(startDate.getTime() + (days / 154) * i * 24 * 60 * 60 * 1000)
+    try {
+      // Get real historical Bitcoin data (4 years from 2020-2024)
+      const endTime = Math.floor(new Date('2024-08-19').getTime() / 1000)
+      const startTime = Math.floor(new Date('2020-01-01').getTime() / 1000)
       
-      // Realistic price evolution (Bitcoin went from ~$7k to ~$117k from 2020-2025)
-      const timeProgress = i / 154
-      const basePrice = 7000 + (117000 - 7000) * timeProgress
-      const volatility = (Math.sin(i * 0.3) * 0.2 + Math.cos(i * 0.7) * 0.15) * basePrice
-      currentPrice = basePrice + volatility
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${startTime}&to=${endTime}`
+      )
       
-      if (!position) {
-        // Enter new position
-        const isLong = longShortPattern[i % longShortPattern.length]
-        position = isLong ? 'LONG' : 'SHORT'
-        entryPrice = currentPrice
-        size = equity / currentPrice * 0.95 // Use 95% of equity
-        
-        trades.push({
-          date: tradeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          action: `ENTRY ${position}`,
-          price: currentPrice,
-          size: size,
-          pnl: null,
-          equity: equity,
-          comment: position === 'LONG' ? 'Long Entry Signal' : 'Short Entry Signal'
-        })
-      } else {
-        // Close position with realistic outcomes
-        const outcome = tradeOutcomes[tradeIndex % tradeOutcomes.length]
-        let pnl = 0
-        
-        if (outcome === 'L') {
-          // Small loss (typical stop loss)
-          const lossPercent = 0.02 + Math.abs(Math.sin(i)) * 0.03 // 2-5% loss
-          pnl = position === 'LONG' ? -equity * lossPercent : -equity * lossPercent
-        } else if (outcome === 'W') {
-          // Big win (breakout trade)
-          const winPercent = 0.15 + Math.abs(Math.cos(i)) * 0.25 // 15-40% win
-          pnl = position === 'LONG' ? equity * winPercent : equity * winPercent
-        } else if (outcome === 'WW') {
-          // Massive win (major breakout)
-          const massiveWinPercent = 0.5 + Math.abs(Math.sin(i * 2)) * 1.5 // 50-200% win
-          pnl = position === 'LONG' ? equity * massiveWinPercent : equity * massiveWinPercent
+      if (!response.ok) {
+        throw new Error('Failed to fetch historical data')
+      }
+      
+      const data = await response.json()
+      const prices = data.prices || []
+      
+      // Convert to daily OHLC data
+      const dailyData: { [key: string]: { prices: number[], timestamps: number[] } } = {}
+      
+      prices.forEach(([timestamp, price]: [number, number]) => {
+        const date = new Date(timestamp).toISOString().split('T')[0]
+        if (!dailyData[date]) {
+          dailyData[date] = { prices: [], timestamps: [] }
         }
-        
-        equity += pnl
-        
-        trades.push({
-          date: tradeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          action: `CLOSE ${position}`,
-          price: currentPrice,
-          size: size,
-          pnl: pnl,
-          equity: equity,
-          comment: pnl > 0 ? 'Profit Target' : 'Stop Loss'
+        dailyData[date].prices.push(price)
+        dailyData[date].timestamps.push(timestamp)
+      })
+      
+      // Create OHLC candles for strategy calculation
+      const ohlcData = Object.entries(dailyData)
+        .map(([date, dayData]) => {
+          const prices = dayData.prices
+          const open = prices[0]
+          const close = prices[prices.length - 1]
+          const high = Math.max(...prices)
+          const low = Math.min(...prices)
+          
+          return {
+            date: new Date(date),
+            open,
+            high,
+            low,
+            close,
+            timestamp: dayData.timestamps[0]
+          }
         })
+        .sort((a, b) => a.timestamp - b.timestamp)
+      
+      // Apply Adaptive Volatility Breakout Strategy
+      // Strategy parameters (same as Pine Script)
+      const lookbackPeriod = 20
+      const rangeMultiplier = 0.5
+      const stopLossMultiplier = 2.5
+      const atrPeriod = 14
+      const initialCapital = 100000
+      
+      let equity = initialCapital
+      let position = null // null, 'LONG', or 'SHORT'
+      let entryPrice = 0
+      let entryDate = null
+      let positionSize = 0
+      
+      // Calculate ATR for stop losses
+      const calculateATR = (data: any[], period: number, index: number) => {
+        if (index < period) return null
         
-        position = null
-        tradeIndex++
+        let sum = 0
+        for (let i = Math.max(0, index - period + 1); i <= index; i++) {
+          const current = data[i]
+          const previous = i > 0 ? data[i - 1] : current
+          
+          const tr = Math.max(
+            current.high - current.low,
+            Math.abs(current.high - previous.close),
+            Math.abs(current.low - previous.close)
+          )
+          sum += tr
+        }
+        return sum / period
+      }
+      
+      // Process each day for strategy signals
+      for (let i = lookbackPeriod; i < ohlcData.length; i++) {
+        const currentBar = ohlcData[i]
+        const atr = calculateATR(ohlcData, atrPeriod, i)
+        
+        // Calculate breakout levels (lookback period)
+        const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i)
+        const highestHigh = Math.max(...lookbackBars.map(bar => bar.high))
+        const lowestLow = Math.min(...lookbackBars.map(bar => bar.low))
+        const breakoutRange = highestHigh - lowestLow
+        
+        const upperBoundary = currentBar.open + breakoutRange * rangeMultiplier
+        const lowerBoundary = currentBar.open - breakoutRange * rangeMultiplier
+        
+        // Check for entry signals (no current position)
+        if (!position) {
+          // Long entry: price breaks above upper boundary
+          if (currentBar.high > upperBoundary) {
+            position = 'LONG'
+            entryPrice = upperBoundary
+            entryDate = currentBar.date
+            positionSize = (equity * 0.95) / entryPrice // Use 95% of equity
+            
+            trades.push({
+              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'ENTRY LONG',
+              price: entryPrice,
+              size: positionSize,
+              pnl: null,
+              equity: equity,
+              comment: 'Breakout Long Entry Signal'
+            })
+          }
+          // Short entry: price breaks below lower boundary  
+          else if (currentBar.low < lowerBoundary) {
+            position = 'SHORT'
+            entryPrice = lowerBoundary
+            entryDate = currentBar.date
+            positionSize = (equity * 0.95) / entryPrice // Use 95% of equity
+            
+            trades.push({
+              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'ENTRY SHORT',
+              price: entryPrice,
+              size: positionSize,
+              pnl: null,
+              equity: equity,
+              comment: 'Breakout Short Entry Signal'
+            })
+          }
+        }
+        // Check for exit signals (current position exists)
+        else {
+          let exitPrice = null
+          let exitReason = ''
+          
+          if (position === 'LONG') {
+            // Long stop loss
+            const stopLoss = entryPrice - (atr * stopLossMultiplier)
+            if (currentBar.low <= stopLoss) {
+              exitPrice = stopLoss
+              exitReason = 'Stop Loss'
+            }
+            // Reverse signal - short entry
+            else if (currentBar.low < lowerBoundary) {
+              exitPrice = lowerBoundary
+              exitReason = 'Reverse to Short'
+              
+              // Calculate P&L for long position
+              const longPnl = (exitPrice - entryPrice) * positionSize
+              equity += longPnl
+              
+              trades.push({
+                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                action: 'CLOSE LONG',
+                price: exitPrice,
+                size: positionSize,
+                pnl: longPnl,
+                equity: equity,
+                comment: exitReason
+              })
+              
+              // Immediately enter short position
+              position = 'SHORT'
+              entryPrice = exitPrice
+              positionSize = (equity * 0.95) / entryPrice
+              
+              trades.push({
+                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                action: 'ENTRY SHORT',
+                price: entryPrice,
+                size: positionSize,
+                pnl: null,
+                equity: equity,
+                comment: 'Breakout Short Entry Signal'
+              })
+              continue
+            }
+          }
+          else if (position === 'SHORT') {
+            // Short stop loss
+            const stopLoss = entryPrice + (atr * stopLossMultiplier)
+            if (currentBar.high >= stopLoss) {
+              exitPrice = stopLoss
+              exitReason = 'Stop Loss'
+            }
+            // Reverse signal - long entry
+            else if (currentBar.high > upperBoundary) {
+              exitPrice = upperBoundary
+              exitReason = 'Reverse to Long'
+              
+              // Calculate P&L for short position
+              const shortPnl = (entryPrice - exitPrice) * positionSize
+              equity += shortPnl
+              
+              trades.push({
+                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                action: 'CLOSE SHORT',
+                price: exitPrice,
+                size: positionSize,
+                pnl: shortPnl,
+                equity: equity,
+                comment: exitReason
+              })
+              
+              // Immediately enter long position
+              position = 'LONG'
+              entryPrice = exitPrice
+              positionSize = (equity * 0.95) / entryPrice
+              
+              trades.push({
+                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                action: 'ENTRY LONG',
+                price: entryPrice,
+                size: positionSize,
+                pnl: null,
+                equity: equity,
+                comment: 'Breakout Long Entry Signal'
+              })
+              continue
+            }
+          }
+          
+          // Execute exit if conditions met
+          if (exitPrice !== null) {
+            let pnl = 0
+            if (position === 'LONG') {
+              pnl = (exitPrice - entryPrice) * positionSize
+            } else if (position === 'SHORT') {
+              pnl = (entryPrice - exitPrice) * positionSize
+            }
+            
+            equity += pnl
+            
+            trades.push({
+              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: `CLOSE ${position}`,
+              price: exitPrice,
+              size: positionSize,
+              pnl: pnl,
+              equity: equity,
+              comment: exitReason
+            })
+            
+            position = null
+          }
+        }
+      }
+      
+      return trades.reverse() // Most recent first
+      
+    } catch (error) {
+      console.error('Failed to generate real strategy trades:', error)
+      // Return empty array if API fails
+      return []
+    }
+  }
+
+  const [allTrades, setAllTrades] = useState<any[]>([])
+  const [tradesLoading, setTradesLoading] = useState(true)
+  
+  // Load real strategy trades on component mount
+  useEffect(() => {
+    const loadTrades = async () => {
+      setTradesLoading(true)
+      try {
+        const trades = await generateAllTrades()
+        setAllTrades(trades)
+      } catch (error) {
+        console.error('Failed to load trades:', error)
+        setAllTrades([])
+      } finally {
+        setTradesLoading(false)
       }
     }
     
-    return trades.reverse() // Most recent first
-  }
-
-  const allTrades = useMemo(() => generateAllTrades(), [])
+    loadTrades()
+  }, [])
   
   // Pagination logic
   const totalPages = Math.ceil(allTrades.length / tradesPerPage)
@@ -177,6 +357,14 @@ function App() {
 
   // Generate real equity curve data from trades
   const generateEquityData = () => {
+    if (allTrades.length === 0) {
+      // Return default starting point while loading
+      return [{
+        date: new Date('2020-01-01'),
+        equity: 100000
+      }]
+    }
+    
     // Use the actual trades to create equity curve
     const equityPoints = []
     const startingEquity = 100000
@@ -187,8 +375,9 @@ function App() {
       equity: startingEquity
     })
     
-    // Add equity points from actual trades
-    allTrades.forEach(trade => {
+    // Add equity points from actual trades (in chronological order)
+    const chronologicalTrades = [...allTrades].reverse()
+    chronologicalTrades.forEach(trade => {
       equityPoints.push({
         date: new Date(trade.date),
         equity: trade.equity
@@ -805,7 +994,19 @@ function App() {
                     <div>Comment</div>
                   </div>
                   
-                  {currentTrades.map((trade, index) => (
+                  {tradesLoading ? (
+                    <div style={{ 
+                      padding: '2rem',
+                      textAlign: 'center',
+                      color: '#7d8590'
+                    }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚡</div>
+                      <div>Loading real market data and calculating strategy trades...</div>
+                      <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                        Applying Adaptive Volatility Breakout algorithm to 2020-2024 Bitcoin data
+                      </div>
+                    </div>
+                  ) : currentTrades.map((trade, index) => (
                     <div key={index} style={{ 
                       display: 'grid', 
                       gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr 1fr 2fr',
