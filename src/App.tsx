@@ -1,501 +1,381 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
-import { getLivePrice } from './services/livePriceService'
-import './index.css'
+import { useState, useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
+import styled from 'styled-components'
 
-interface BitcoinData {
-  time: string
-  open: number
-  high: number
-  low: number
-  close: number
-  volume: number
-}
+// Components
+import Header from './components/Header'
+import DataSourceSelector from './components/DataSourceSelector'
+import CandlestickChart from './components/CandlestickChart'
+import PerformanceMetrics from './components/PerformanceMetrics'
+import EquityCurve from './components/EquityCurve'
+import TradesList from './components/TradesList'
+import LoadingSpinner from './components/LoadingSpinner'
 
-interface LivePrice {
-  price: number
-  change24h: number
-  timestamp: string
-}
+// Services
+import { apiService } from './services/apiService'
+import { staticDataService } from './services/staticDataService'
 
-interface TradeSignal {
-  time: string
-  type: 'BUY' | 'SELL'
-  price: number
-  reason: string
-}
+// Types
+import type { DataSource, BacktestResult } from './types/api'
+
+const AppContainer = styled.div`
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+`
+
+const MainContent = styled.div`
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  padding: 1rem;
+  max-width: 100vw;
+  overflow-x: hidden;
+`
+
+const ChartSection = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 1rem;
+  min-height: 600px;
+`
+
+const ControlsPanel = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+`
+
+const AnalyticsSection = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+`
+
+const TabContainer = styled.div`
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+`
+
+const TabHeader = styled.div`
+  display: flex;
+  border-bottom: 1px solid var(--border-primary);
+`
+
+const Tab = styled.button<{ active: boolean }>`
+  padding: 12px 24px;
+  background-color: ${props => props.active ? 'var(--bg-tertiary)' : 'transparent'};
+  border: none;
+  border-bottom: 2px solid ${props => props.active ? 'var(--accent-blue)' : 'transparent'};
+  color: ${props => props.active ? 'var(--text-primary)' : 'var(--text-secondary)'};
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+`
+
+const TabContent = styled.div`
+  padding: 1rem;
+`
+
+const ErrorMessage = styled.div`
+  background-color: rgba(218, 54, 51, 0.1);
+  border: 1px solid var(--accent-red);
+  border-radius: 8px;
+  padding: 1rem;
+  color: var(--accent-red);
+  margin: 1rem 0;
+`
 
 function App() {
-  const [livePrice, setLivePrice] = useState<LivePrice | null>(null)
+  // State management
+  const [selectedSource, setSelectedSource] = useState<string>('coinbase')
+  const [dataSources, setDataSources] = useState<DataSource[]>([])
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null)
   const [loading, setLoading] = useState(true)
-  const [currentTime, setCurrentTime] = useState(new Date())
-  const [historicalData, setHistoricalData] = useState<BitcoinData[]>([])
-  const [tradeSignals, setTradeSignals] = useState<TradeSignal[]>([])
-  const [selectedSource, setSelectedSource] = useState('coinbase')
-  const [activeTab, setActiveTab] = useState<'chart' | 'performance' | 'trades'>('chart')
-  
-  const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<any>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
+  const [useStaticData, setUseStaticData] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
-  // Update time every second
+  // Load available data sources on component mount
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(timer)
+    loadDataSources()
   }, [])
 
-  // Fetch live price every 30 seconds
+  // Load backtest data when source changes
   useEffect(() => {
-    fetchLivePrice()
-    const interval = setInterval(fetchLivePrice, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Load historical data and create chart
-  useEffect(() => {
-    loadHistoricalData()
+    if (selectedSource) {
+      loadBacktestData(selectedSource)
+    }
   }, [selectedSource])
 
-  // Create chart when data is loaded
-  useEffect(() => {
-    if (historicalData.length > 0 && chartContainerRef.current && !loading) {
-      createCandlestickChart()
-    }
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.remove()
-        chartRef.current = null
-      }
-    }
-  }, [historicalData, loading])
-
-  const fetchLivePrice = async () => {
+  const loadDataSources = async () => {
     try {
-      const priceData = await getLivePrice()
-      setLivePrice(priceData)
-    } catch (error) {
-      console.error('Failed to fetch live price:', error)
-      setLivePrice({
-        price: 67000,
-        change24h: 2.5,
-        timestamp: new Date().toISOString()
-      })
-    }
-  }
-
-  const loadHistoricalData = async () => {
-    setLoading(true)
-    try {
-      console.log('Loading historical data for:', selectedSource)
-      
-      // Generate realistic Bitcoin data for the last 90 days
-      const mockData: BitcoinData[] = []
-      const mockSignals: TradeSignal[] = []
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - 90)
-      
-      let currentPrice = 65000 + Math.random() * 20000
-      
-      for (let i = 0; i < 90; i++) {
-        const date = new Date(startDate)
-        date.setDate(date.getDate() + i)
-        
-        // Generate realistic price movement
-        const volatility = 0.03
-        const priceChange = (Math.random() - 0.5) * volatility * currentPrice
-        const newPrice = currentPrice + priceChange
-        
-        const high = newPrice + Math.random() * 0.02 * newPrice
-        const low = newPrice - Math.random() * 0.02 * newPrice
-        const open = currentPrice
-        const close = newPrice
-        
-        mockData.push({
-          time: date.toISOString().split('T')[0],
-          open,
-          high,
-          low,
-          close,
-          volume: Math.random() * 1000000 + 500000
-        })
-        
-        // Generate trade signals (every 7-10 days)
-        if (i % 8 === 0 && i > 0) {
-          const signal: TradeSignal = {
-            time: date.toISOString().split('T')[0],
-            type: Math.random() > 0.5 ? 'BUY' : 'SELL',
-            price: close,
-            reason: Math.random() > 0.5 ? 'Volatility Breakout' : 'Stop Loss'
-          }
-          mockSignals.push(signal)
+      // Try API first, fallback to static data
+      let sources: DataSource[]
+      try {
+        const isApiAvailable = await apiService.isAvailable()
+        if (isApiAvailable) {
+          sources = await apiService.getDataSources()
+          setUseStaticData(false)
+        } else {
+          throw new Error('API not available')
         }
-        
-        currentPrice = newPrice
+      } catch (apiError) {
+        console.log('API not available, using static data')
+        try {
+          sources = await staticDataService.getDataSources()
+          setUseStaticData(true)
+        } catch (staticError) {
+          console.error('Static data service also failed:', staticError)
+          throw staticError
+        }
       }
       
-      setHistoricalData(mockData)
-      setTradeSignals(mockSignals)
-      console.log('Historical data loaded:', mockData.length, 'records')
-    } catch (error) {
-      console.error('Error loading historical data:', error)
+      setDataSources(sources)
+      
+      // Set first active source as default
+      const activeSource = sources.find(s => s.status === 'active')
+      if (activeSource && !selectedSource) {
+        setSelectedSource(activeSource.name)
+      }
+      
+      setInitialized(true)
+    } catch (err) {
+      setError('Failed to load data sources')
+      console.error('Error loading data sources:', err)
+      setInitialized(true)
     } finally {
       setLoading(false)
     }
   }
 
-  const createCandlestickChart = () => {
-    if (!chartContainerRef.current || chartRef.current) return
-
-    chartRef.current = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'white',
-      },
-      grid: {
-        vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
-      rightPriceScale: {
-        borderColor: 'rgba(197, 203, 206, 0.8)',
-      },
-      timeScale: {
-        borderColor: 'rgba(197, 203, 206, 0.8)',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    })
-
-    // Add candlestick series
-    const candlestickSeries = chartRef.current.addCandlestickSeries({
-      upColor: '#4CAF50',
-      downColor: '#f44336',
-      borderUpColor: '#4CAF50',
-      borderDownColor: '#f44336',
-      wickUpColor: '#4CAF50',
-      wickDownColor: '#f44336',
-    })
-
-    // Convert data format for the chart
-    const chartData = historicalData.map(d => ({
-      time: d.time,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-    }))
-
-    candlestickSeries.setData(chartData)
-
-    // Add trade signals as markers
-    const markers = tradeSignals.map(signal => ({
-      time: signal.time,
-      position: signal.type === 'BUY' ? 'belowBar' : 'aboveBar',
-      color: signal.type === 'BUY' ? '#4CAF50' : '#f44336',
-      shape: signal.type === 'BUY' ? 'arrowUp' : 'arrowDown',
-      text: signal.type,
-    }))
-
-    candlestickSeries.setMarkers(markers)
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        })
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
+  const loadBacktestData = async (source: string) => {
+    setLoading(true)
+    setError(null)
     
-    return () => {
-      window.removeEventListener('resize', handleResize)
+    try {
+      const result = useStaticData 
+        ? await staticDataService.getBacktestResults(source)
+        : await apiService.getBacktestResults(source)
+      setBacktestResult(result)
+    } catch (err) {
+      setError(`Failed to load backtest data for ${source}`)
+      console.error('Error loading backtest data:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const refreshData = () => {
-    fetchLivePrice()
-    loadHistoricalData()
+  const handleSourceChange = (source: string) => {
+    setSelectedSource(source)
   }
 
-  const calculatePerformance = () => {
-    if (tradeSignals.length === 0) return null
-    
-    let equity = 100000 // Starting capital
-    let position = 0
-    let totalTrades = 0
-    let winningTrades = 0
-    
-    for (const signal of tradeSignals) {
-      if (signal.type === 'BUY' && position === 0) {
-        position = equity / signal.price
-        totalTrades++
-      } else if (signal.type === 'SELL' && position > 0) {
-        equity = position * signal.price
-        if (equity > 100000) winningTrades++
-        position = 0
-      }
-    }
-    
-    const totalReturn = ((equity - 100000) / 100000) * 100
-    const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0
-    
-    return {
-      totalReturn: totalReturn.toFixed(2),
-      totalTrades,
-      winRate: winRate.toFixed(1),
-      finalEquity: equity.toLocaleString()
+  const refreshData = async () => {
+    if (selectedSource) {
+      await loadBacktestData(selectedSource)
     }
   }
-
-  const performance = calculatePerformance()
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
-      padding: '1rem'
-    }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        
-        {/* Header */}
-        <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '2.5rem', margin: '0 0 0.5rem 0' }}>
-            📊 Bitcoin Trading Strategy Dashboard
-          </h1>
-          <p style={{ opacity: 0.9, margin: 0 }}>
-            {currentTime.toLocaleString()} • Live Analysis + Backtesting
-          </p>
-        </header>
-
-        {/* Controls */}
-        <div style={{
-          background: 'rgba(255,255,255,0.1)',
-          padding: '1rem',
-          borderRadius: '8px',
-          marginBottom: '2rem',
-          display: 'flex',
-          gap: '1rem',
-          alignItems: 'center',
-          flexWrap: 'wrap'
-        }}>
-          <select 
-            value={selectedSource}
-            onChange={(e) => setSelectedSource(e.target.value)}
-            style={{
-              padding: '0.5rem',
-              borderRadius: '4px',
-              border: 'none',
-              background: 'white',
-              color: 'black'
-            }}
-          >
-            <option value="coinbase">Coinbase Historical</option>
-            <option value="binance">Binance Historical</option>
-            <option value="bitstamp">Bitstamp Historical</option>
-          </select>
-          
-          <button
-            onClick={refreshData}
-            disabled={loading}
-            style={{
-              padding: '0.5rem 1rem',
-              border: 'none',
-              borderRadius: '4px',
-              background: loading ? '#666' : '#4CAF50',
-              color: 'white',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {loading ? '🔄 Loading...' : '🔄 Refresh Analysis'}
-          </button>
-
-          <div style={{ marginLeft: 'auto', fontSize: '0.9rem' }}>
-            📊 Demo Mode • Live Price + Historical Backtest
-          </div>
-        </div>
-
-        {/* Live Price Card */}
-        <div style={{
-          background: 'rgba(255,255,255,0.15)',
-          padding: '2rem',
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          border: '1px solid rgba(255,255,255,0.2)'
-        }}>
-          <h2 style={{ margin: '0 0 1rem 0' }}>🚀 Live Bitcoin Price</h2>
-          {livePrice ? (
-            <>
-              <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#FFD700', marginBottom: '0.5rem' }}>
-                ${livePrice.price.toLocaleString()}
-              </div>
-              <div style={{ display: 'flex', gap: '2rem', fontSize: '1rem' }}>
-                <span>
-                  24h Change: <span style={{ color: livePrice.change24h >= 0 ? '#4CAF50' : '#f44336' }}>
-                    {livePrice.change24h >= 0 ? '+' : ''}{livePrice.change24h.toFixed(2)}%
-                  </span>
-                </span>
-                <span>Updated: {new Date(livePrice.timestamp).toLocaleTimeString()}</span>
-                {performance && (
-                  <span>Strategy Return: <span style={{ color: parseFloat(performance.totalReturn) >= 0 ? '#4CAF50' : '#f44336' }}>
-                    {performance.totalReturn}%
-                  </span></span>
-                )}
-              </div>
-            </>
-          ) : (
-            <div>Loading live price...</div>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div style={{
-          background: 'rgba(255,255,255,0.1)',
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          overflow: 'hidden'
-        }}>
-          <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-            {(['chart', 'performance', 'trades'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '1rem 2rem',
-                  border: 'none',
-                  background: activeTab === tab ? 'rgba(255,255,255,0.2)' : 'transparent',
-                  color: 'white',
-                  cursor: 'pointer',
-                  textTransform: 'capitalize',
-                  fontWeight: activeTab === tab ? 'bold' : 'normal'
-                }}
-              >
-                {tab === 'chart' ? '📈 Candlestick Chart' : 
-                 tab === 'performance' ? '📊 Performance' : '📋 Trade Signals'}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ padding: '2rem' }}>
-            {activeTab === 'chart' && (
-              <div>
-                <h3 style={{ margin: '0 0 1rem 0' }}>
-                  Interactive Candlestick Chart (Last 90 Days) - {selectedSource}
-                </h3>
-                {loading ? (
-                  <div style={{ textAlign: 'center', padding: '3rem' }}>
-                    <div>🔄 Loading candlestick chart...</div>
+    <AppContainer>
+      <Routes>
+        <Route path="/" element={
+          <>
+            <Header />
+            
+            <MainContent>
+              {/* Controls Section */}
+              <ControlsPanel>
+                <DataSourceSelector
+                  sources={dataSources}
+                  selectedSource={selectedSource}
+                  onSourceChange={handleSourceChange}
+                />
+                
+                <button onClick={refreshData} disabled={loading}>
+                  {loading ? 'Refreshing...' : 'Refresh Data'}
+                </button>
+                
+                {backtestResult && (
+                  <div style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    {useStaticData && <span style={{ color: 'orange', marginRight: '1rem' }}>📊 Demo Mode</span>}
+                    Last updated: {new Date(backtestResult.run_timestamp).toLocaleString()}
                   </div>
-                ) : (
-                  <div
-                    ref={chartContainerRef}
-                    style={{
-                      height: '400px',
-                      background: 'rgba(0,0,0,0.3)',
-                      borderRadius: '8px',
-                      marginBottom: '1rem'
-                    }}
+                )}
+              </ControlsPanel>
+
+              {/* Error Display */}
+              {error && <ErrorMessage>{error}</ErrorMessage>}
+
+              {/* Loading Spinner */}
+              {loading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem' }}>
+                  <LoadingSpinner />
+                  <div style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>
+                    {!initialized ? 'Initializing application...' : 'Loading backtest data...'}
+                  </div>
+                  {useStaticData && (
+                    <div style={{ marginTop: '0.5rem', color: 'orange', fontSize: '0.9rem' }}>
+                      📊 Using demo data (API not available)
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Main Chart Section */}
+              {backtestResult && !loading && (
+                <ChartSection>
+                  <MetricsGrid>
+                    <PerformanceMetrics metrics={backtestResult.performance_metrics} />
+                  </MetricsGrid>
+                  
+                  <CandlestickChart
+                    chartData={backtestResult.chart_data}
+                    tradeSignals={backtestResult.trade_signals}
+                    source={selectedSource}
                   />
-                )}
-                <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>
-                  🔍 Interactive chart with buy/sell signals • Green arrows = BUY, Red arrows = SELL
-                </div>
-              </div>
-            )}
+                </ChartSection>
+              )}
 
-            {activeTab === 'performance' && performance && (
-              <div>
-                <h3 style={{ margin: '0 0 2rem 0' }}>Strategy Performance Analysis</h3>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '1.5rem'
-                }}>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '8px' }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#FFD700' }}>Total Return</h4>
-                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: parseFloat(performance.totalReturn) >= 0 ? '#4CAF50' : '#f44336' }}>
-                      {performance.totalReturn}%
-                    </div>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '8px' }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#FFD700' }}>Total Trades</h4>
-                    <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>
-                      {performance.totalTrades}
-                    </div>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '8px' }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#FFD700' }}>Win Rate</h4>
-                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: parseFloat(performance.winRate) >= 50 ? '#4CAF50' : '#f44336' }}>
-                      {performance.winRate}%
-                    </div>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '8px' }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', color: '#FFD700' }}>Final Equity</h4>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                      ${performance.finalEquity}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'trades' && (
-              <div>
-                <h3 style={{ margin: '0 0 1rem 0' }}>Trade Signals History</h3>
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {tradeSignals.map((signal, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        background: 'rgba(0,0,0,0.2)',
-                        padding: '1rem',
-                        marginBottom: '0.5rem',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <span style={{
-                          background: signal.type === 'BUY' ? '#4CAF50' : '#f44336',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          fontSize: '0.8rem',
-                          fontWeight: 'bold'
-                        }}>
-                          {signal.type}
-                        </span>
-                      </div>
-                      <div>${signal.price.toLocaleString()}</div>
-                      <div>{signal.time}</div>
-                      <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>{signal.reason}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          textAlign: 'center',
-          marginTop: '2rem',
-          opacity: 0.7,
-          fontSize: '0.9rem'
-        }}>
-          <p>🤖 Advanced Bitcoin Trading Strategy • Live CoinGecko API + Historical Backtesting</p>
-          <p>Professional candlestick charts powered by Lightweight Charts</p>
-        </div>
-      </div>
-    </div>
+              {/* Analytics Section */}
+              {backtestResult && !loading && (
+                <AnalyticsSection>
+                  <TabContainer>
+                    <TabHeader>
+                      <Tab 
+                        active={activeTab === 'overview'} 
+                        onClick={() => setActiveTab('overview')}
+                      >
+                        Overview
+                      </Tab>
+                      <Tab 
+                        active={activeTab === 'performance'} 
+                        onClick={() => setActiveTab('performance')}
+                      >
+                        Performance
+                      </Tab>
+                      <Tab 
+                        active={activeTab === 'trades'} 
+                        onClick={() => setActiveTab('trades')}
+                      >
+                        List of trades
+                      </Tab>
+                    </TabHeader>
+                    
+                    <TabContent>
+                      {activeTab === 'overview' && (
+                        <div>
+                          <h3>Strategy Overview</h3>
+                          <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+                            Adaptive Volatility Breakout strategy with reversal capability, 
+                            optimized for Bitcoin trading across multiple data sources.
+                          </p>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                            <div>
+                              <h4>Strategy Parameters</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Lookback Period: {backtestResult.parameters.lookback_period}</div>
+                                <div>Range Multiplier: {backtestResult.parameters.range_mult}</div>
+                                <div>Stop Loss Multiplier: {backtestResult.parameters.stop_loss_mult}</div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4>Data Source</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>{dataSources.find(s => s.name === selectedSource)?.display_name}</div>
+                                <div>Total Candles: {backtestResult.chart_data.total_candles}</div>
+                                <div>Timeframe: {backtestResult.chart_data.timeframe}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'performance' && backtestResult.performance_metrics && (
+                        <div>
+                          <h3>Detailed Performance Analysis</h3>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                            <div>
+                              <h4>Returns & Profitability</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Total Return: <span className="text-green">{backtestResult.performance_metrics.total_return_percent.toFixed(1)}%</span></div>
+                                <div>Net Profit: ${backtestResult.performance_metrics.net_profit.toLocaleString()}</div>
+                                <div>Gross Profit: ${backtestResult.performance_metrics.gross_profit.toLocaleString()}</div>
+                                <div>Gross Loss: ${backtestResult.performance_metrics.gross_loss.toLocaleString()}</div>
+                                <div>Profit Factor: {backtestResult.performance_metrics.profit_factor.toFixed(2)}</div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4>Trade Statistics</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Total Trades: {backtestResult.performance_metrics.total_trades}</div>
+                                <div>Winning Trades: {backtestResult.performance_metrics.winning_trades}</div>
+                                <div>Losing Trades: {backtestResult.performance_metrics.losing_trades}</div>
+                                <div>Win Rate: {backtestResult.performance_metrics.win_rate_percent.toFixed(1)}%</div>
+                                <div>Average Trade: ${backtestResult.performance_metrics.average_trade.toLocaleString()}</div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4>Risk Metrics</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Max Drawdown: <span className="text-red">{backtestResult.performance_metrics.max_drawdown_percent.toFixed(1)}%</span></div>
+                                <div>Peak Equity: ${backtestResult.performance_metrics.peak_equity.toLocaleString()}</div>
+                                <div>Final Equity: ${backtestResult.performance_metrics.final_equity.toLocaleString()}</div>
+                                <div>Long Trades: {backtestResult.performance_metrics.long_trades}</div>
+                                <div>Short Trades: {backtestResult.performance_metrics.short_trades}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'trades' && (
+                        <TradesList trades={backtestResult.trade_signals} />
+                      )}
+                    </TabContent>
+                  </TabContainer>
+                  
+                  <EquityCurve equityCurve={backtestResult.equity_curve} />
+                </AnalyticsSection>
+              )}
+            </MainContent>
+          </>
+        } />
+      </Routes>
+    </AppContainer>
   )
 }
 
