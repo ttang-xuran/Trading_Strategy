@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import LiveHistoricalChart from './components/LiveHistoricalChart'
+import { livePriceService } from './services/livePriceService'
 import './index.css'
 
 // Mock data for now to get the basic layout working
@@ -21,16 +22,16 @@ const mockPerformanceData = {
   short_trades: 77
 }
 
-const mockPrice = {
-  price: 112831.18,
-  change24h: -2.94,
+const initialPrice = {
+  price: 0,
+  change24h: 0,
   timestamp: new Date().toISOString()
 }
 
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [selectedSource, setSelectedSource] = useState('bitstamp')
-  const [livePrice, setLivePrice] = useState(mockPrice)
+  const [livePrice, setLivePrice] = useState(initialPrice)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
@@ -265,18 +266,28 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // Mock live price updates
+  // Real live price updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLivePrice(prev => ({
-        ...prev,
-        price: prev.price + (Math.random() - 0.5) * 1000,
-        change24h: prev.change24h + (Math.random() - 0.5) * 0.5,
-        timestamp: new Date().toISOString()
-      }))
-    }, 30000)
+    const fetchLivePrice = async () => {
+      try {
+        const priceData = await livePriceService.getLiveBitcoinPrice()
+        setLivePrice({
+          price: priceData.price,
+          change24h: priceData.change24h || 0,
+          timestamp: new Date().toISOString()
+        })
+      } catch (error) {
+        console.error('Failed to fetch live price:', error)
+      }
+    }
+
+    // Fetch immediately
+    fetchLivePrice()
+    
+    // Then fetch every 30 seconds
+    const interval = setInterval(fetchLivePrice, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [selectedSource])
 
   return (
     <div style={{
@@ -483,7 +494,7 @@ function App() {
               Bitcoin - {selectedSource.toUpperCase()}
             </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f0f6fc' }}>
-              ${livePrice.price.toLocaleString()}
+              {livePrice.price > 0 ? `$${livePrice.price.toLocaleString()}` : 'Loading...'}
             </div>
           </div>
           <div style={{ 
@@ -574,7 +585,7 @@ function App() {
                 color: '#FFD700',
                 marginBottom: '0.5rem'
               }}>
-                ${livePrice.price.toLocaleString()}
+                {livePrice.price > 0 ? `$${livePrice.price.toLocaleString()}` : 'Loading...'}
               </div>
               <div style={{ fontSize: '0.8rem', color: '#7d8590' }}>
                 <div>24h Change: <span style={{ 
