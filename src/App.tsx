@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import SimpleCandlestickChart from './components/SimpleCandlestickChart'
 import './index.css'
 
 // Mock data for now to get the basic layout working
@@ -306,21 +307,16 @@ function App() {
             </div>
           </div>
           
-          <div style={{
-            height: '400px',
-            backgroundColor: '#0d1117',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            border: '1px solid #30363d'
-          }}>
-            <div style={{ textAlign: 'center', color: '#7d8590' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📈</div>
-              <div style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Interactive Candlestick Chart</div>
-              <div style={{ opacity: 0.8 }}>90 days of coinbase data with 12 trade signals</div>
-            </div>
+          <div style={{ position: 'relative' }}>
+            <SimpleCandlestickChart 
+              height={400} 
+              tradeSignals={[
+                { date: '2024-08-01', type: 'BUY', price: 65000, reason: 'Volatility Breakout' },
+                { date: '2024-08-15', type: 'SELL', price: 70000, reason: 'Stop Loss' },
+                { date: '2024-09-01', type: 'BUY', price: 68000, reason: 'Reversal Signal' },
+                { date: '2024-09-15', type: 'SELL', price: 72000, reason: 'Take Profit' }
+              ]} 
+            />
             
             {/* Live Price Overlay */}
             <div style={{
@@ -331,7 +327,8 @@ function App() {
               border: '1px solid #30363d',
               borderRadius: '8px',
               padding: '1rem',
-              minWidth: '200px'
+              minWidth: '200px',
+              zIndex: 10
             }}>
               <div style={{ 
                 display: 'flex', 
