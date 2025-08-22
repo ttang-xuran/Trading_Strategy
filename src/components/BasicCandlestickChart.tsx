@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 
 interface CandleData {
   date: string
@@ -23,25 +23,43 @@ interface Props {
 export default function BasicCandlestickChart({ height = 400, tradeSignals = [] }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Generate realistic Bitcoin OHLC data for the last 90 days
-  const generateCandleData = (): CandleData[] => {
+  // Memoize the candle data so it doesn't change on re-renders
+  const candleData = useMemo(() => {
+    // Generate consistent Bitcoin OHLC data for the last 90 days (static data)
+    const generateCandleData = (): CandleData[] => {
+    // Using a fixed seed for consistent data generation
     const data: CandleData[] = []
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - 90)
+    const startDate = new Date('2025-05-23') // Fixed start date
     
-    let currentPrice = 65000 + Math.random() * 25000
+    // Start with a fixed price
+    let currentPrice = 80000
+    
+    // Predefined price movements for consistent chart
+    const priceMovements = [
+      -0.02, 0.015, 0.03, -0.01, 0.025, -0.015, 0.02, -0.025, 0.035, -0.005,
+      0.01, -0.02, 0.04, -0.015, 0.025, 0.005, -0.03, 0.045, -0.01, 0.02,
+      -0.025, 0.015, 0.03, -0.02, 0.035, -0.005, 0.01, -0.015, 0.025, 0.02,
+      -0.03, 0.04, -0.01, 0.025, -0.015, 0.02, 0.005, -0.025, 0.035, -0.02,
+      0.015, 0.03, -0.005, 0.025, -0.015, 0.02, -0.025, 0.04, -0.01, 0.015,
+      0.025, -0.02, 0.035, -0.015, 0.02, 0.005, -0.03, 0.045, -0.025, 0.01,
+      0.02, -0.015, 0.03, -0.005, 0.025, 0.015, -0.02, 0.035, -0.01, 0.025,
+      -0.015, 0.02, 0.005, -0.025, 0.04, -0.02, 0.015, 0.03, -0.005, 0.025,
+      -0.015, 0.02, -0.025, 0.035, -0.01, 0.015, 0.025, -0.02, 0.03, 0.005
+    ]
     
     for (let i = 0; i < 90; i++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + i)
       
-      // Generate realistic price movement
-      const volatility = 0.025
-      const priceChange = (Math.random() - 0.5) * volatility * currentPrice
+      // Use predefined movement instead of random
+      const movement = priceMovements[i] || 0.01
+      const priceChange = movement * currentPrice
       const newPrice = currentPrice + priceChange
       
-      const high = Math.max(currentPrice, newPrice) + Math.random() * 0.015 * newPrice
-      const low = Math.min(currentPrice, newPrice) - Math.random() * 0.015 * newPrice
+      // Create consistent high/low values
+      const volatilityFactor = 0.008 // Fixed volatility
+      const high = Math.max(currentPrice, newPrice) + volatilityFactor * newPrice
+      const low = Math.min(currentPrice, newPrice) - volatilityFactor * newPrice
       const open = currentPrice
       const close = newPrice
       
@@ -57,7 +75,10 @@ export default function BasicCandlestickChart({ height = 400, tradeSignals = [] 
     }
     
     return data
-  }
+    }
+    
+    return generateCandleData()
+  }, []) // Empty dependency array means this will only run once
 
   const drawChart = () => {
     const canvas = canvasRef.current
@@ -65,8 +86,6 @@ export default function BasicCandlestickChart({ height = 400, tradeSignals = [] 
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
-    const candleData = generateCandleData()
     
     // Set canvas size
     const rect = canvas.getBoundingClientRect()
