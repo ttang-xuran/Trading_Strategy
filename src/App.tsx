@@ -1,224 +1,349 @@
-import React, { useState, useEffect } from 'react'
-import './index.css'
+import { useState, useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
+import styled from 'styled-components'
 
-interface BitcoinPrice {
-  price: number
-  change24h: number
-  timestamp: string
-}
+// Components
+import Header from './components/Header'
+import DataSourceSelector from './components/DataSourceSelector'
+import CandlestickChart from './components/CandlestickChart'
+import PerformanceMetrics from './components/PerformanceMetrics'
+import EquityCurve from './components/EquityCurve'
+import TradesList from './components/TradesList'
+import LoadingSpinner from './components/LoadingSpinner'
+
+// Services
+import { staticDataService } from './services/staticDataService'
+
+// Types
+import type { DataSource, BacktestResult } from './types/api'
+
+const AppContainer = styled.div`
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+`
+
+const MainContent = styled.div`
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  padding: 1rem;
+  max-width: 100vw;
+  overflow-x: hidden;
+`
+
+const ChartSection = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 1rem;
+  min-height: 600px;
+`
+
+const ControlsPanel = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+`
+
+const AnalyticsSection = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+`
+
+const TabContainer = styled.div`
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  overflow: hidden;
+`
+
+const TabHeader = styled.div`
+  display: flex;
+  border-bottom: 1px solid var(--border-primary);
+`
+
+const Tab = styled.button<{ active: boolean }>`
+  padding: 12px 24px;
+  background-color: ${props => props.active ? 'var(--bg-tertiary)' : 'transparent'};
+  border: none;
+  border-bottom: 2px solid ${props => props.active ? 'var(--accent-blue)' : 'transparent'};
+  color: ${props => props.active ? 'var(--text-primary)' : 'var(--text-secondary)'};
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+`
+
+const TabContent = styled.div`
+  padding: 1rem;
+`
+
+const ErrorMessage = styled.div`
+  background-color: rgba(218, 54, 51, 0.1);
+  border: 1px solid var(--accent-red);
+  border-radius: 8px;
+  padding: 1rem;
+  color: var(--accent-red);
+  margin: 1rem 0;
+`
 
 function App() {
-  const [btcPrice, setBtcPrice] = useState<BitcoinPrice | null>(null)
+  // State management
+  const [selectedSource, setSelectedSource] = useState<string>('coinbase')
+  const [dataSources, setDataSources] = useState<DataSource[]>([])
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null)
   const [loading, setLoading] = useState(true)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
 
-  // Update time every second
+  // Load available data sources on component mount
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    return () => clearInterval(timer)
+    loadDataSources()
   }, [])
 
-  // Fetch Bitcoin price
+  // Load backtest data when source changes
   useEffect(() => {
-    fetchBitcoinPrice()
-    const interval = setInterval(fetchBitcoinPrice, 30000) // Update every 30 seconds
-    return () => clearInterval(interval)
-  }, [])
+    if (selectedSource && dataSources.length > 0) {
+      loadBacktestData(selectedSource)
+    }
+  }, [selectedSource, dataSources])
 
-  const fetchBitcoinPrice = async () => {
+  const loadDataSources = async () => {
     try {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true')
-      const data = await response.json()
-      setBtcPrice({
-        price: data.bitcoin.usd,
-        change24h: data.bitcoin.usd_24h_change || 0,
-        timestamp: new Date().toISOString()
-      })
-    } catch (error) {
-      console.error('Failed to fetch Bitcoin price:', error)
-      setBtcPrice({
-        price: 67000, // Fallback price
-        change24h: 0,
-        timestamp: new Date().toISOString()
-      })
+      console.log('Loading data sources...')
+      const sources = await staticDataService.getDataSources()
+      console.log('Data sources loaded:', sources)
+      setDataSources(sources)
+      
+      // Set first active source as default
+      const activeSource = sources.find(s => s.status === 'active')
+      if (activeSource) {
+        setSelectedSource(activeSource.name)
+      }
+    } catch (err) {
+      console.error('Error loading data sources:', err)
+      setError('Failed to load data sources')
+    }
+  }
+
+  const loadBacktestData = async (source: string) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      console.log('Loading backtest data for:', source)
+      const result = await staticDataService.getBacktestResults(source)
+      console.log('Backtest data loaded:', result)
+      setBacktestResult(result)
+    } catch (err) {
+      console.error('Error loading backtest data:', err)
+      setError(`Failed to load backtest data for ${source}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const refreshPrice = () => {
-    setLoading(true)
-    fetchBitcoinPrice()
+  const handleSourceChange = (source: string) => {
+    setSelectedSource(source)
+  }
+
+  const refreshData = async () => {
+    if (selectedSource) {
+      await loadBacktestData(selectedSource)
+    }
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
-      padding: '2rem'
-    }}>
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto'
-      }}>
-        {/* Header */}
-        <header style={{
-          textAlign: 'center',
-          marginBottom: '3rem'
-        }}>
-          <h1 style={{
-            fontSize: '3rem',
-            margin: '0 0 1rem 0',
-            textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
-          }}>
-            🚀 BTC Trading Strategy
-          </h1>
-          <p style={{
-            fontSize: '1.2rem',
-            opacity: 0.9,
-            margin: 0
-          }}>
-            Live Bitcoin Trading Dashboard
-          </p>
-        </header>
-
-        {/* Current Time */}
-        <div style={{
-          background: 'rgba(255,255,255,0.1)',
-          padding: '1rem',
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          textAlign: 'center',
-          backdropFilter: 'blur(10px)'
-        }}>
-          <h3 style={{ margin: '0 0 0.5rem 0' }}>Current Time</h3>
-          <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-            {currentTime.toLocaleString()}
-          </div>
-        </div>
-
-        {/* Bitcoin Price Card */}
-        <div style={{
-          background: 'rgba(255,255,255,0.15)',
-          padding: '2rem',
-          borderRadius: '16px',
-          marginBottom: '2rem',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255,255,255,0.2)'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1rem'
-          }}>
-            <h2 style={{ margin: 0, fontSize: '1.8rem' }}>
-              📊 Live Bitcoin Price
-            </h2>
-            <button
-              onClick={refreshPrice}
-              disabled={loading}
-              style={{
-                background: loading ? '#666' : '#4CAF50',
-                color: 'white',
-                border: 'none',
-                padding: '0.7rem 1.5rem',
-                borderRadius: '8px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: 'bold'
-              }}
-            >
-              {loading ? '🔄 Loading...' : '🔄 Refresh'}
-            </button>
-          </div>
-
-          {btcPrice ? (
-            <div>
-              <div style={{
-                fontSize: '3rem',
-                fontWeight: 'bold',
-                marginBottom: '1rem',
-                color: '#FFD700'
-              }}>
-                ${btcPrice.price.toLocaleString()}
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                gap: '2rem',
-                flexWrap: 'wrap'
-              }}>
-                <div>
-                  <span style={{ opacity: 0.8 }}>24h Change: </span>
-                  <span style={{
-                    color: btcPrice.change24h >= 0 ? '#4CAF50' : '#f44336',
-                    fontWeight: 'bold'
-                  }}>
-                    {btcPrice.change24h >= 0 ? '+' : ''}{btcPrice.change24h.toFixed(2)}%
-                  </span>
+    <AppContainer>
+      <Routes>
+        <Route path="/" element={
+          <>
+            <Header />
+            
+            <MainContent>
+              {/* Controls Section */}
+              <ControlsPanel>
+                <DataSourceSelector
+                  sources={dataSources}
+                  selectedSource={selectedSource}
+                  onSourceChange={handleSourceChange}
+                />
+                
+                <button onClick={refreshData} disabled={loading}>
+                  {loading ? 'Refreshing...' : 'Refresh Data'}
+                </button>
+                
+                <div style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  <span style={{ color: 'orange', marginRight: '1rem' }}>📊 Demo Mode (Static Data)</span>
+                  {backtestResult && `Last updated: ${new Date(backtestResult.run_timestamp).toLocaleString()}`}
                 </div>
-                <div>
-                  <span style={{ opacity: 0.8 }}>Last Updated: </span>
-                  <span>{new Date(btcPrice.timestamp).toLocaleTimeString()}</span>
+              </ControlsPanel>
+
+              {/* Error Display */}
+              {error && <ErrorMessage>{error}</ErrorMessage>}
+
+              {/* Loading Spinner */}
+              {loading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem' }}>
+                  <LoadingSpinner />
+                  <div style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>
+                    Loading trading strategy data...
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{
-              textAlign: 'center',
-              padding: '2rem',
-              opacity: 0.7
-            }}>
-              Loading Bitcoin price...
-            </div>
-          )}
-        </div>
+              )}
 
-        {/* Strategy Info */}
-        <div style={{
-          background: 'rgba(255,255,255,0.1)',
-          padding: '2rem',
-          borderRadius: '12px',
-          marginBottom: '2rem'
-        }}>
-          <h3 style={{ margin: '0 0 1rem 0' }}>📈 Trading Strategy Info</h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '1rem',
-            fontSize: '0.95rem'
-          }}>
-            <div>
-              <strong>Strategy:</strong> Adaptive Volatility Breakout
-            </div>
-            <div>
-              <strong>Status:</strong> <span style={{ color: '#4CAF50' }}>✅ Active Demo Mode</span>
-            </div>
-            <div>
-              <strong>Data Sources:</strong> Coinbase, Binance, Bitstamp
-            </div>
-            <div>
-              <strong>Update Frequency:</strong> Real-time price, Historical analysis
-            </div>
-          </div>
-        </div>
+              {/* Main Chart Section */}
+              {backtestResult && !loading && (
+                <ChartSection>
+                  <MetricsGrid>
+                    <PerformanceMetrics metrics={backtestResult.performance_metrics} />
+                  </MetricsGrid>
+                  
+                  <CandlestickChart
+                    chartData={backtestResult.chart_data}
+                    tradeSignals={backtestResult.trade_signals}
+                    source={selectedSource}
+                  />
+                </ChartSection>
+              )}
 
-        {/* Footer */}
-        <div style={{
-          textAlign: 'center',
-          opacity: 0.7,
-          marginTop: '3rem'
-        }}>
-          <p>🤖 Built with React + Live Bitcoin API Integration</p>
-          <p>Data provided by CoinGecko API</p>
-        </div>
-      </div>
-    </div>
+              {/* Analytics Section */}
+              {backtestResult && !loading && (
+                <AnalyticsSection>
+                  <TabContainer>
+                    <TabHeader>
+                      <Tab 
+                        active={activeTab === 'overview'} 
+                        onClick={() => setActiveTab('overview')}
+                      >
+                        Strategy Overview
+                      </Tab>
+                      <Tab 
+                        active={activeTab === 'performance'} 
+                        onClick={() => setActiveTab('performance')}
+                      >
+                        Detailed Performance
+                      </Tab>
+                      <Tab 
+                        active={activeTab === 'trades'} 
+                        onClick={() => setActiveTab('trades')}
+                      >
+                        Trade History
+                      </Tab>
+                    </TabHeader>
+                    
+                    <TabContent>
+                      {activeTab === 'overview' && (
+                        <div>
+                          <h3>Adaptive Volatility Breakout Strategy</h3>
+                          <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+                            This strategy uses volatility breakouts with reversal capability, 
+                            optimized for Bitcoin trading across multiple data sources with live price integration.
+                          </p>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                            <div>
+                              <h4>Strategy Parameters</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Lookback Period: {backtestResult.parameters.lookback_period}</div>
+                                <div>Range Multiplier: {backtestResult.parameters.range_mult}</div>
+                                <div>Stop Loss Multiplier: {backtestResult.parameters.stop_loss_mult}</div>
+                                <div>ATR Period: {backtestResult.parameters.atr_period}</div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4>Data Source: {dataSources.find(s => s.name === selectedSource)?.display_name}</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Total Candles: {backtestResult.chart_data.total_candles.toLocaleString()}</div>
+                                <div>Timeframe: {backtestResult.chart_data.timeframe}</div>
+                                <div>Live Price Integration: ✅ Active</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'performance' && backtestResult.performance_metrics && (
+                        <div>
+                          <h3>Detailed Performance Analysis</h3>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                            <div>
+                              <h4>Returns & Profitability</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Total Return: <span style={{ color: 'var(--accent-green)' }}>{backtestResult.performance_metrics.total_return_percent.toFixed(1)}%</span></div>
+                                <div>Net Profit: ${backtestResult.performance_metrics.net_profit.toLocaleString()}</div>
+                                <div>Gross Profit: ${backtestResult.performance_metrics.gross_profit.toLocaleString()}</div>
+                                <div>Gross Loss: ${backtestResult.performance_metrics.gross_loss.toLocaleString()}</div>
+                                <div>Profit Factor: {backtestResult.performance_metrics.profit_factor.toFixed(2)}</div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4>Trade Statistics</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Total Trades: {backtestResult.performance_metrics.total_trades}</div>
+                                <div>Winning Trades: {backtestResult.performance_metrics.winning_trades}</div>
+                                <div>Losing Trades: {backtestResult.performance_metrics.losing_trades}</div>
+                                <div>Win Rate: {backtestResult.performance_metrics.win_rate_percent.toFixed(1)}%</div>
+                                <div>Average Trade: ${backtestResult.performance_metrics.average_trade.toLocaleString()}</div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h4>Risk Metrics</h4>
+                              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div>Max Drawdown: <span style={{ color: 'var(--accent-red)' }}>{backtestResult.performance_metrics.max_drawdown_percent.toFixed(1)}%</span></div>
+                                <div>Peak Equity: ${backtestResult.performance_metrics.peak_equity.toLocaleString()}</div>
+                                <div>Final Equity: ${backtestResult.performance_metrics.final_equity.toLocaleString()}</div>
+                                <div>Long Trades: {backtestResult.performance_metrics.long_trades}</div>
+                                <div>Short Trades: {backtestResult.performance_metrics.short_trades}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {activeTab === 'trades' && (
+                        <TradesList trades={backtestResult.trade_signals} />
+                      )}
+                    </TabContent>
+                  </TabContainer>
+                  
+                  <EquityCurve equityCurve={backtestResult.equity_curve} />
+                </AnalyticsSection>
+              )}
+            </MainContent>
+          </>
+        } />
+      </Routes>
+    </AppContainer>
   )
 }
 
