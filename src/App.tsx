@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
+import { getLivePrice } from './services/livePriceService'
 import './index.css'
 
 interface BitcoinData {
@@ -69,13 +70,8 @@ function App() {
 
   const fetchLivePrice = async () => {
     try {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true')
-      const data = await response.json()
-      setLivePrice({
-        price: data.bitcoin.usd,
-        change24h: data.bitcoin.usd_24h_change || 0,
-        timestamp: new Date().toISOString()
-      })
+      const priceData = await getLivePrice()
+      setLivePrice(priceData)
     } catch (error) {
       console.error('Failed to fetch live price:', error)
       setLivePrice({
