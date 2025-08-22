@@ -48,7 +48,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         const yearStart = new Date(new Date().getFullYear(), 0, 1)
         return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
       case '1Y': return 365
-      case 'All': return 1000 // Max available
+      case 'All': return 365 // Limited by free API
       default: return 180
     }
   }
@@ -109,42 +109,44 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       return candles
       
     } catch (error) {
-      console.error('Failed to load historical data:', error)
+      console.error('Failed to load historical data from CoinGecko API:', error)
+      console.error('Falling back to generated data starting from current price:', currentPrice)
       // Fallback to static data if API fails
-      return generateFallbackData()
+      return generateFallbackData(currentPrice)
     } finally {
       setLoading(false)
     }
   }
 
   // Fallback data if API fails
-  const generateFallbackData = (): CandleData[] => {
+  const generateFallbackData = (livePriceHint?: number): CandleData[] => {
     const data: CandleData[] = []
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - 90)
     
-    let currentPrice = 112000
+    // Start from current live price if available, otherwise use recent realistic price
+    let startingPrice = livePriceHint || 117000
     
     for (let i = 0; i < 90; i++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + i)
       
-      const change = (Math.random() - 0.5) * 0.04 * currentPrice
-      const newPrice = currentPrice + change
+      const change = (Math.random() - 0.5) * 0.04 * startingPrice
+      const newPrice = startingPrice + change
       
-      const high = Math.max(currentPrice, newPrice) + Math.random() * 0.01 * newPrice
-      const low = Math.min(currentPrice, newPrice) - Math.random() * 0.01 * newPrice
+      const high = Math.max(startingPrice, newPrice) + Math.random() * 0.01 * newPrice
+      const low = Math.min(startingPrice, newPrice) - Math.random() * 0.01 * newPrice
       
       data.push({
         date: date.toISOString().split('T')[0],
-        open: currentPrice,
+        open: startingPrice,
         high,
         low,
         close: newPrice,
         timestamp: date.getTime()
       })
       
-      currentPrice = newPrice
+      startingPrice = newPrice
     }
     
     return data
