@@ -43,17 +43,21 @@ function App() {
   }
 
   // Apply real Adaptive Volatility Breakout strategy to historical Bitcoin data
-  const generateAllTrades = async () => {
+  const generateAllTrades = async (source: string = 'coinbase') => {
     const trades = []
     
     try {
-      // Get real historical Bitcoin data (4 years from 2020-2024)
-      const endTime = Math.floor(new Date('2024-08-19').getTime() / 1000)
-      const startTime = Math.floor(new Date('2020-01-01').getTime() / 1000)
+      console.log(`Loading historical data for source: ${source}`)
+      
+      // Get real historical Bitcoin data (90 days - free API limit)
+      // Using CoinGecko API which provides reliable historical data regardless of source  
+      console.log(`Fetching 90 days of historical data`)
       
       const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${startTime}&to=${endTime}`
+        `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=90`
       )
+      
+      console.log('Response status:', response.status)
       
       if (!response.ok) {
         throw new Error('Failed to fetch historical data')
@@ -61,6 +65,12 @@ function App() {
       
       const data = await response.json()
       const prices = data.prices || []
+      
+      console.log(`Received ${prices.length} price points`)
+      
+      if (prices.length === 0) {
+        throw new Error('No price data received from API')
+      }
       
       // Convert to daily OHLC data
       const dailyData: { [key: string]: { prices: number[], timestamps: number[] } } = {}
@@ -93,6 +103,8 @@ function App() {
           }
         })
         .sort((a, b) => a.timestamp - b.timestamp)
+      
+      console.log(`Created ${ohlcData.length} daily candles`)
       
       // Apply Adaptive Volatility Breakout Strategy
       // Strategy parameters (same as Pine Script)
@@ -296,10 +308,12 @@ function App() {
         }
       }
       
+      console.log(`Generated ${trades.length} trades`)
       return trades.reverse() // Most recent first
       
     } catch (error) {
       console.error('Failed to generate real strategy trades:', error)
+      console.error('Error details:', error)
       // Return empty array if API fails
       return []
     }
@@ -308,12 +322,14 @@ function App() {
   const [allTrades, setAllTrades] = useState<any[]>([])
   const [tradesLoading, setTradesLoading] = useState(true)
   
-  // Load real strategy trades on component mount
+  // Load real strategy trades on component mount and when source changes
   useEffect(() => {
     const loadTrades = async () => {
       setTradesLoading(true)
       try {
-        const trades = await generateAllTrades()
+        console.log('Starting trade loading...')
+        const trades = await generateAllTrades(selectedSource)
+        console.log('Trades loaded:', trades.length)
         setAllTrades(trades)
       } catch (error) {
         console.error('Failed to load trades:', error)
@@ -324,7 +340,7 @@ function App() {
     }
     
     loadTrades()
-  }, [])
+  }, [selectedSource])
   
   // Pagination logic
   const totalPages = Math.ceil(allTrades.length / tradesPerPage)
@@ -369,9 +385,11 @@ function App() {
     const equityPoints = []
     const startingEquity = 100000
     
-    // Start with initial capital
+    // Start with initial capital  
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - 90) // 90 days ago
     equityPoints.push({
-      date: new Date('2020-01-01'),
+      date: startDate,
       equity: startingEquity
     })
     
