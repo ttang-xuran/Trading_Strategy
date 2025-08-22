@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import SimpleCandlestickChart from './components/SimpleCandlestickChart'
+import BasicCandlestickChart from './components/BasicCandlestickChart'
 import './index.css'
 
 // Mock data for now to get the basic layout working
@@ -308,13 +308,13 @@ function App() {
           </div>
           
           <div style={{ position: 'relative' }}>
-            <SimpleCandlestickChart 
+            <BasicCandlestickChart 
               height={400} 
               tradeSignals={[
-                { date: '2024-08-01', type: 'BUY', price: 65000, reason: 'Volatility Breakout' },
-                { date: '2024-08-15', type: 'SELL', price: 70000, reason: 'Stop Loss' },
-                { date: '2024-09-01', type: 'BUY', price: 68000, reason: 'Reversal Signal' },
-                { date: '2024-09-15', type: 'SELL', price: 72000, reason: 'Take Profit' }
+                { date: '2025-06-01', type: 'BUY', price: 65000, reason: 'Volatility Breakout' },
+                { date: '2025-06-15', type: 'SELL', price: 70000, reason: 'Stop Loss' },
+                { date: '2025-07-01', type: 'BUY', price: 68000, reason: 'Reversal Signal' },
+                { date: '2025-07-15', type: 'SELL', price: 72000, reason: 'Take Profit' }
               ]} 
             />
             
