@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import EnhancedCandlestickChart from './components/EnhancedCandlestickChart'
+import LiveHistoricalChart from './components/LiveHistoricalChart'
 import './index.css'
 
 // Mock data for now to get the basic layout working
@@ -308,7 +308,7 @@ function App() {
           </div>
           
           <div style={{ position: 'relative' }}>
-            <EnhancedCandlestickChart 
+            <LiveHistoricalChart 
               height={400}
               source={selectedSource}
               tradeSignals={[
