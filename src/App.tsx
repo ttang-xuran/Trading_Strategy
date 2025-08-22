@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import LiveHistoricalChart from './components/LiveHistoricalChart'
 import { livePriceService } from './services/livePriceService'
 import './index.css'
@@ -42,8 +42,31 @@ function App() {
     setRefreshKey(prev => prev + 1) // Force chart to reload data
   }
 
-  // Generate comprehensive trades data (154 trades)
+  // Generate consistent trades data (154 trades) - using deterministic values
   const generateAllTrades = () => {
+    // Predefined deterministic values to ensure consistency
+    const priceChanges = [
+      0.02, -0.03, 0.05, -0.01, 0.04, -0.02, 0.06, -0.04, 0.03, -0.05,
+      0.01, -0.02, 0.07, -0.03, 0.02, -0.01, 0.04, -0.06, 0.05, -0.02,
+      0.03, -0.04, 0.01, -0.03, 0.08, -0.05, 0.02, -0.01, 0.04, -0.03,
+      0.06, -0.02, 0.01, -0.04, 0.05, -0.03, 0.02, -0.01, 0.04, -0.05,
+      0.03, -0.02, 0.07, -0.04, 0.01, -0.03, 0.05, -0.02, 0.04, -0.01,
+      0.02, -0.05, 0.06, -0.03, 0.01, -0.02, 0.04, -0.04, 0.05, -0.01,
+      0.03, -0.03, 0.02, -0.04, 0.06, -0.02, 0.01, -0.05, 0.04, -0.01,
+      0.05, -0.03, 0.02, -0.02, 0.03, -0.04, 0.01, -0.01
+    ]
+    
+    const longShortPattern = [
+      true, false, true, true, false, true, false, false, true, false,
+      true, false, true, false, true, true, false, true, false, true,
+      false, true, false, true, true, false, false, true, false, true,
+      true, false, true, false, false, true, false, true, true, false,
+      true, true, false, false, true, false, true, false, true, false,
+      true, false, true, true, false, false, true, false, true, true,
+      false, true, false, false, true, true, false, true, false, true,
+      false, true, false, true, true, false, true, false
+    ]
+    
     const trades = []
     const startDate = new Date('2020-01-01')
     const endDate = new Date('2025-08-19')
@@ -59,14 +82,14 @@ function App() {
     for (let i = 0; i < 154; i++) {
       const tradeDate = new Date(startDate.getTime() + (days / 154) * i * 24 * 60 * 60 * 1000)
       
-      // Simulate price evolution
-      const priceChange = (Math.random() - 0.5) * 0.1
+      // Use deterministic price evolution
+      const priceChange = priceChanges[i % priceChanges.length]
       currentPrice = currentPrice * (1 + priceChange)
       currentPrice = Math.max(5000, Math.min(150000, currentPrice)) // Keep within realistic bounds
       
       if (!position) {
-        // Enter new position
-        const isLong = Math.random() > 0.5
+        // Enter new position using deterministic pattern
+        const isLong = longShortPattern[i % longShortPattern.length]
         position = isLong ? 'LONG' : 'SHORT'
         entryPrice = currentPrice
         size = equity / currentPrice * 0.95 // Use 95% of equity
@@ -115,7 +138,7 @@ function App() {
     return trades.reverse() // Most recent first
   }
 
-  const allTrades = generateAllTrades()
+  const allTrades = useMemo(() => generateAllTrades(), [])
   
   // Pagination logic
   const totalPages = Math.ceil(allTrades.length / tradesPerPage)
