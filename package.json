@@ -13,6 +13,7 @@
     "@types/papaparse": "^5.3.16",
     "axios": "^1.6.0",
     "date-fns": "^2.30.0",
+    "lightweight-charts": "^5.0.8",
     "lodash": "^4.17.21",
     "papaparse": "^5.5.3",
     "plotly.js": "^2.27.0",
