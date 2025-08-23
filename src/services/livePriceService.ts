@@ -184,16 +184,26 @@ class LivePriceService {
 
   private async fetchCoinbaseHistorical(days: number): Promise<any[]> {
     // Coinbase Pro API for historical candles
-    const endTime = new Date()
-    const startTime = new Date()
-    startTime.setDate(startTime.getDate() - days)
+    let startTime: Date, endTime: Date
+    
+    if (days >= 9999) {
+      // For "All" request, get maximum available data (Coinbase started trading BTC in 2015)
+      startTime = new Date('2015-01-01') // Coinbase Pro launch
+      endTime = new Date()
+      console.log('Fetching ALL Coinbase data from 2015 to now')
+    } else {
+      // Regular date range request
+      endTime = new Date()
+      startTime = new Date()
+      startTime.setDate(startTime.getDate() - days)
+      console.log(`Fetching ${days} days of Coinbase data`)
+    }
     
     const response = await fetch(
       `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startTime.toISOString()}&end=${endTime.toISOString()}&granularity=86400`
     )
     
     if (!response.ok) throw new Error('Coinbase historical API failed')
-    
     const data = await response.json()
     
     // Convert Coinbase format [timestamp, low, high, open, close, volume] to our format
@@ -210,7 +220,16 @@ class LivePriceService {
   private async fetchBitstampHistorical(days: number): Promise<any[]> {
     // Bitstamp OHLC API
     const step = 86400 // Daily candles
-    const limit = Math.min(days, 1000) // API limit
+    let limit: number
+    
+    if (days >= 9999) {
+      // For "All" request, get maximum available data (Bitstamp limit is ~1000)
+      limit = 1000 // Bitstamp API maximum
+      console.log('Fetching ALL Bitstamp data (1000 days max)')
+    } else {
+      limit = Math.min(days, 1000) // API limit
+      console.log(`Fetching ${limit} days of Bitstamp data`)
+    }
     
     const response = await fetch(
       `https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=${step}&limit=${limit}`
@@ -232,8 +251,16 @@ class LivePriceService {
 
   private async fetchBinanceHistorical(days: number): Promise<any[]> {
     // Binance klines API - use limit only for better compatibility
-    const limit = Math.min(days, 1000) // API limit is 1000
-    console.log(`Binance API call: limit=${limit}`)
+    let limit: number
+    
+    if (days >= 9999) {
+      // For "All" request, get maximum available data (Binance limit is 1000)
+      limit = 1000 // Binance API maximum
+      console.log('Fetching ALL Binance data (1000 days max)')
+    } else {
+      limit = Math.min(days, 1000) // API limit is 1000
+      console.log(`Binance API call: limit=${limit}`)
+    }
     
     const response = await fetch(
       `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=${limit}`
@@ -256,7 +283,16 @@ class LivePriceService {
 
   private async fetchCoinGeckoHistorical(days: number): Promise<any[]> {
     // CoinGecko historical prices (limited to avoid rate limits)
-    const limitedDays = Math.min(days, 30) // Reduce to avoid rate limits
+    let limitedDays: number
+    
+    if (days >= 9999) {
+      // For "All" request, try to get more data (CoinGecko free limit is ~365 days)
+      limitedDays = 365 // Maximum for free API
+      console.log('Fetching ALL CoinGecko data (365 days max for free API)')
+    } else {
+      limitedDays = Math.min(days, 365) // Use up to 365 days
+      console.log(`Fetching ${limitedDays} days of CoinGecko data`)
+    }
     
     const response = await fetch(
       `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${limitedDays}&interval=daily`

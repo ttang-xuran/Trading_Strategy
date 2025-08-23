@@ -276,9 +276,27 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const chartWidth = rect.width - padding * 2
     const chartHeight = rect.height - padding * 2
 
-    // Calculate visible data range based on zoom and pan
-    // Show fewer candles to make them wider and more readable
-    const maxVisibleCandles = 30 // Reduced to show fewer candles at once for better visibility
+    // Calculate visible data range based on zoom and pan - fewer candles = thicker bars
+    // Adjust visible candles based on timeframe to ensure thick candlesticks
+    let maxVisibleCandles: number
+    switch (selectedTimeRange) {
+      case '1M': 
+        maxVisibleCandles = 30
+        break
+      case '3M': 
+        maxVisibleCandles = 25
+        break
+      case '6M':
+      case 'YTD':
+      case '1Y':
+        maxVisibleCandles = 15 // Much fewer for longer timeframes
+        break
+      case 'All':
+        maxVisibleCandles = 10 // Very few for maximum data to ensure thick bars
+        break
+      default:
+        maxVisibleCandles = 20
+    }
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
     const startIndex = Math.max(0, Math.min(
