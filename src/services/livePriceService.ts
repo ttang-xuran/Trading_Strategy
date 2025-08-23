@@ -137,23 +137,48 @@ class LivePriceService {
    * Get real historical OHLC data from specific source
    */
   async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
+    console.log(`getHistoricalData called: source=${source}, days=${days}`)
     try {
+      let result: any[]
       switch (source.toLowerCase()) {
         case 'coinbase':
-          return await this.fetchCoinbaseHistorical(days)
+          console.log('Fetching from Coinbase...')
+          result = await this.fetchCoinbaseHistorical(days)
+          break
         case 'bitstamp':
-          return await this.fetchBitstampHistorical(days)
+          console.log('Fetching from Bitstamp...')
+          result = await this.fetchBitstampHistorical(days)
+          break
         case 'binance':
-          return await this.fetchBinanceHistorical(days)
+          console.log('Fetching from Binance...')
+          result = await this.fetchBinanceHistorical(days)
+          break
         case 'coingecko':
-          return await this.fetchCoinGeckoHistorical(days)
+          console.log('Fetching from CoinGecko...')
+          result = await this.fetchCoinGeckoHistorical(days)
+          break
         default:
           console.log(`Unknown source: ${source}, falling back to CoinGecko`)
-          return await this.fetchCoinGeckoHistorical(days)
+          result = await this.fetchCoinGeckoHistorical(days)
       }
+      console.log(`Historical data fetch result: ${result.length} candles`)
+      if (result.length === 0) {
+        throw new Error(`No data returned from ${source} API`)
+      }
+      return result
     } catch (error) {
-      console.error(`Failed to fetch historical data from ${source}:`, error)
-      throw error
+      console.error(`Failed to fetch historical data from ${source} for ${days} days:`, error)
+      
+      // Try fallback to a different API if the first one fails
+      console.log('Attempting fallback to Binance API...')
+      try {
+        const fallbackResult = await this.fetchBinanceHistorical(Math.min(days, 1000))
+        console.log(`Fallback successful: ${fallbackResult.length} candles from Binance`)
+        return fallbackResult
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError)
+        throw new Error(`Both primary (${source}) and fallback (Binance) APIs failed`)
+      }
     }
   }
 
@@ -206,13 +231,12 @@ class LivePriceService {
   }
 
   private async fetchBinanceHistorical(days: number): Promise<any[]> {
-    // Binance klines API
-    const endTime = Date.now()
-    const startTime = endTime - (days * 24 * 60 * 60 * 1000)
-    const limit = Math.min(days, 1000) // API limit
+    // Binance klines API - use limit only for better compatibility
+    const limit = Math.min(days, 1000) // API limit is 1000
+    console.log(`Binance API call: limit=${limit}`)
     
     const response = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime=${startTime}&endTime=${endTime}&limit=${limit}`
+      `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=${limit}`
     )
     
     if (!response.ok) throw new Error('Binance historical API failed')
