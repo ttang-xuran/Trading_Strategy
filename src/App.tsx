@@ -78,14 +78,30 @@ function App() {
     setRefreshKey(prev => prev + 1) // Force chart to reload data
   }
 
+  // Convert timeframe to days
+  const getTimeframeDays = (timeframe: string): number => {
+    switch (timeframe) {
+      case '1M': return 30
+      case '3M': return 90
+      case '6M': return 180
+      case 'YTD': 
+        const yearStart = new Date(new Date().getFullYear(), 0, 1)
+        return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
+      case '1Y': return 365
+      case 'All': return 1000 // Maximum available data
+      default: return 180
+    }
+  }
+
   // Generate real strategy trades using actual historical market data
-  const generateAllTrades = async (source: string = 'coinbase') => {
-    console.log(`Generating strategy trades for source: ${source}`)
+  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M') => {
+    console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}`)
     
     try {
-      // Get REAL historical OHLC data from the selected exchange
-      console.log(`Fetching real historical data from ${source}...`)
-      const ohlcData = await livePriceService.getHistoricalData(source, 90)
+      // Get REAL historical OHLC data from the selected exchange for the selected timeframe
+      const days = getTimeframeDays(timeframe)
+      console.log(`Fetching ${days} days of real historical data from ${source}...`)
+      const ohlcData = await livePriceService.getHistoricalData(source, days)
       
       console.log(`Received ${ohlcData.length} days of REAL ${source} OHLC data`)
       
@@ -234,14 +250,16 @@ function App() {
   const [allTrades, setAllTrades] = useState<any[]>([])
   const [tradesLoading, setTradesLoading] = useState(false)
   const [backtestCompleted, setBacktestCompleted] = useState(false)
+  // State to track selected timeframe from chart component
+  const [selectedTimeframe, setSelectedTimeframe] = useState('6M')
   
   // Manual backtest function - only runs when user clicks button
   const runBacktest = async () => {
     setTradesLoading(true)
     setBacktestCompleted(false)
     try {
-      console.log('Starting backtest for source:', selectedSource)
-      const trades = await generateAllTrades(selectedSource)
+      console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe)
+      const trades = await generateAllTrades(selectedSource, selectedTimeframe)
       console.log('Backtest completed:', trades.length, 'trades')
       setAllTrades(trades)
       setBacktestCompleted(true)
@@ -719,6 +737,7 @@ function App() {
               key={refreshKey}
               height={400}
               source={selectedSource}
+              onTimeframeChange={setSelectedTimeframe}
               tradeSignals={[
                 { date: '2025-07-01', type: 'BUY', price: 115000, reason: 'Volatility Breakout' },
                 { date: '2025-07-15', type: 'SELL', price: 118000, reason: 'Stop Loss' },

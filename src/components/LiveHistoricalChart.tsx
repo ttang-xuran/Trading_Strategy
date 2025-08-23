@@ -21,11 +21,12 @@ interface Props {
   height?: number
   tradeSignals?: TradeSignal[]
   source: string
+  onTimeframeChange?: (timeframe: string) => void
 }
 
 type TimeRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'All'
 
-export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source }: Props) {
+export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source, onTimeframeChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
   const [panOffset, setPanOffset] = useState(0)
@@ -204,6 +205,11 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     setZoomLevel(1) // Reset zoom when changing timeframe
     setPanOffset(0) // Reset pan when changing timeframe
     
+    // Notify parent component about timeframe change for backtesting
+    if (onTimeframeChange) {
+      onTimeframeChange(timeframe)
+    }
+    
     // Refresh live price to ensure consistency
     try {
       const priceData = await livePriceService.getLiveBitcoinPrice()
@@ -223,6 +229,11 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       setCandleData(data)
       setAllHistoricalData(data)
     })
+    
+    // Sync initial timeframe with parent
+    if (onTimeframeChange) {
+      onTimeframeChange(selectedTimeRange)
+    }
   }, [source, selectedTimeRange])
 
   // Update live price and current candle
@@ -330,7 +341,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
 
     // Calculate proper candlestick width for daily data - make them thicker and more visible
     const candleSpacing = chartWidth / visibleData.length
-    const candleWidth = Math.max(12, Math.min(20, candleSpacing * 0.7)) // Minimum 12px width, maximum 20px
+    const candleWidth = Math.max(16, Math.min(30, candleSpacing * 0.8)) // Increased minimum to 16px width, maximum 30px
     
     visibleData.forEach((candle, index) => {
       const x = padding + candleSpacing * index + candleSpacing / 2
