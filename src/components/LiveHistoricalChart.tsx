@@ -339,9 +339,11 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     }
 
-    // Calculate proper candlestick width for daily data - make them thicker and more visible
+    // Calculate proper candlestick width for daily data - make them MUCH thicker and more visible
     const candleSpacing = chartWidth / visibleData.length
-    const candleWidth = Math.max(16, Math.min(30, candleSpacing * 0.8)) // Increased minimum to 16px width, maximum 30px
+    const candleWidth = Math.max(24, Math.min(40, candleSpacing * 0.9)) // Much larger: minimum 24px width, maximum 40px
+    
+    console.log(`Chart debug: visibleData.length=${visibleData.length}, chartWidth=${chartWidth}, candleSpacing=${candleSpacing}, candleWidth=${candleWidth}`)
     
     visibleData.forEach((candle, index) => {
       const x = padding + candleSpacing * index + candleSpacing / 2
@@ -361,9 +363,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         ctx.shadowBlur = 8
       }
 
-      // Draw wick (high-low line) - make it thicker
+      // Draw wick (high-low line) - make it MUCH thicker  
       ctx.strokeStyle = color
-      ctx.lineWidth = isToday ? 3 : 2
+      ctx.lineWidth = isToday ? 4 : 3 // Increased thickness
       ctx.beginPath()
       ctx.moveTo(x, highY)
       ctx.lineTo(x, lowY)
@@ -372,7 +374,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       // Draw body (open-close rectangle) - ensure minimum height for visibility
       ctx.fillStyle = color
       const bodyTop = Math.min(openY, closeY)
-      const bodyHeight = Math.max(3, Math.abs(closeY - openY)) // Minimum 3px height
+      const bodyHeight = Math.max(8, Math.abs(closeY - openY)) // Increased minimum to 8px height
       
       // Draw thick rectangle for the candlestick body
       ctx.fillRect(x - candleWidth/2, bodyTop, candleWidth, bodyHeight)
