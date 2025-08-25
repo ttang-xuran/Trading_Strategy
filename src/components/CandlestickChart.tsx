@@ -79,6 +79,43 @@ const CandlestickChart: React.FC<Props> = ({
 }) => {
   const plotRef = useRef<any>(null)
 
+  // Calculate optimal rendering settings based on data density
+  const getRenderingSettings = (candleCount: number) => {
+    if (candleCount > 2000) {
+      // ALL timeframe - maximum thickness, minimal gaps
+      return {
+        candleWidth: 0.95,
+        lineWidth: 3,
+        optimization: true,
+        tickDensity: 8
+      }
+    } else if (candleCount > 1000) {
+      // 1Y timeframe - thick candles
+      return {
+        candleWidth: 0.9,
+        lineWidth: 2.5,
+        optimization: true,
+        tickDensity: 10
+      }
+    } else if (candleCount > 500) {
+      // 6M timeframe - wider candles
+      return {
+        candleWidth: 0.85,
+        lineWidth: 2,
+        optimization: false,
+        tickDensity: 15
+      }
+    } else {
+      // Shorter timeframes - standard width
+      return {
+        candleWidth: 0.8,
+        lineWidth: 1.5,
+        optimization: false,
+        tickDensity: 20
+      }
+    }
+  }
+
   // Process candlestick data
   const candlestickTrace = useMemo(() => {
     if (!chartData.candles || chartData.candles.length === 0) {
@@ -91,6 +128,10 @@ const CandlestickChart: React.FC<Props> = ({
     const lows = chartData.candles.map(candle => candle.low)
     const closes = chartData.candles.map(candle => candle.close)
 
+    // Get optimal rendering settings based on data density
+    const candleCount = chartData.candles.length
+    const settings = getRenderingSettings(candleCount)
+
     return {
       x: dates,
       open: opens,
@@ -99,8 +140,17 @@ const CandlestickChart: React.FC<Props> = ({
       close: closes,
       type: 'candlestick' as const,
       name: 'BTC/USD',
-      increasing: { line: { color: '#238636' } },
-      decreasing: { line: { color: '#da3633' } },
+      increasing: { 
+        line: { color: '#238636', width: settings.lineWidth },
+        fillcolor: '#238636'
+      },
+      decreasing: { 
+        line: { color: '#da3633', width: settings.lineWidth },
+        fillcolor: '#da3633'
+      },
+      // Set candlestick width dynamically for optimal visibility
+      line: { width: settings.lineWidth },
+      whiskerwidth: settings.candleWidth,
       xaxis: 'x',
       yaxis: 'y',
     }
@@ -251,27 +301,33 @@ const CandlestickChart: React.FC<Props> = ({
   }, [chartData.candles])
 
   // Chart layout configuration - TradingView style
-  const layout: Partial<PlotlyLayout> = {
-    title: `Bitcoin (BTC/USD) - ${source.toUpperCase()}`,
-    xaxis: {
-      title: 'Date',
-      type: 'date',
-      rangeslider: { visible: false }, // Keep rangeslider hidden for cleaner look
-      showgrid: true,
-      gridcolor: '#30363d',
-      zeroline: false,
-      showspikes: true,
-      spikecolor: '#f0f6fc',
-      spikesnap: 'cursor',
-      spikemode: 'across',
-      spikethickness: 1,
-      // Set default range to 6 months from latest data
-      range: [
-        new Date(dataDateRange.end.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        dataDateRange.end.toISOString().split('T')[0]
-      ],
-      // Enable better date range controls - use actual data dates
-      rangeselector: {
+  const layout: Partial<PlotlyLayout> = useMemo(() => {
+    const candleCount = chartData.candles?.length || 0
+    const settings = getRenderingSettings(candleCount)
+    
+    return {
+      title: `Bitcoin (BTC/USD) - ${source.toUpperCase()}`,
+      xaxis: {
+        title: 'Date',
+        type: 'date',
+        rangeslider: { visible: false }, // Keep rangeslider hidden for cleaner look
+        showgrid: true,
+        gridcolor: '#30363d',
+        zeroline: false,
+        showspikes: true,
+        spikecolor: '#f0f6fc',
+        spikesnap: 'cursor',
+        spikemode: 'across',
+        spikethickness: 1,
+        // Optimize tick density based on data density
+        nticks: settings.tickDensity,
+        // Set default range to 6 months from latest data
+        range: [
+          new Date(dataDateRange.end.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          dataDateRange.end.toISOString().split('T')[0]
+        ],
+        // Enable better date range controls - use actual data dates
+        rangeselector: {
         visible: true,
         bgcolor: 'rgba(22, 27, 34, 0.8)',
         bordercolor: '#30363d',
@@ -353,7 +409,8 @@ const CandlestickChart: React.FC<Props> = ({
     },
     // Additional zoom settings
     selectdirection: 'diagonal'
-  }
+    }
+  }, [source, height, dataDateRange, chartData.candles])
 
   // Process boundary lines (upper and lower breakout levels)
   const boundaryTraces = useMemo(() => {
@@ -412,6 +469,8 @@ const CandlestickChart: React.FC<Props> = ({
     scrollZoom: true,
     editable: false,
     staticPlot: false,
+    // Improve rendering performance for large datasets
+    plotGlPixelRatio: 2,
     modeBarButtonsToAdd: [
       {
         name: 'Reset View',
