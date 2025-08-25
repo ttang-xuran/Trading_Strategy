@@ -3,7 +3,7 @@
  * Interactive Bitcoin price chart with trade signals, similar to TradingView
  */
 
-import React, { useMemo, useRef } from 'react'
+import React, { useMemo, useRef, useEffect, useCallback, useState } from 'react'
 import Plot from 'react-plotly.js'
 import styled from 'styled-components'
 import { format } from 'date-fns'
@@ -78,9 +78,11 @@ const CandlestickChart: React.FC<Props> = ({
   height = 500 
 }) => {
   const plotRef = useRef<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [renderError, setRenderError] = useState<string | null>(null)
 
-  // Calculate optimal rendering settings based on data density
-  const getRenderingSettings = (candleCount: number) => {
+  // Calculate optimal rendering settings based on data density (memoized)
+  const getRenderingSettings = useCallback((candleCount: number) => {
     if (candleCount > 2000) {
       // ALL timeframe - maximum thickness, minimal gaps
       return {
@@ -114,23 +116,97 @@ const CandlestickChart: React.FC<Props> = ({
         tickDensity: 20
       }
     }
-  }
+  }, [])
+
+  // Data virtualization for large datasets
+  const getOptimizedCandles = useCallback((candles: typeof chartData.candles) => {
+    if (!candles || candles.length <= 1000) {
+      return candles
+    }
+
+    // For very large datasets, use data sampling to maintain performance
+    if (candles.length > 5000) {
+      // Sample every nth candle to reduce data points while preserving shape
+      const sampleRate = Math.ceil(candles.length / 3000)
+      return candles.filter((_, index) => index % sampleRate === 0)
+    }
+
+    // For moderately large datasets, use time-based aggregation
+    if (candles.length > 2000) {
+      // Group by week for very long timeframes
+      const weeklyCandles: typeof candles = []
+      for (let i = 0; i < candles.length; i += 7) {
+        const week = candles.slice(i, i + 7)
+        if (week.length > 0) {
+          weeklyCandles.push({
+            timestamp: week[week.length - 1].timestamp,
+            open: week[0].open,
+            high: Math.max(...week.map(c => c.high)),
+            low: Math.min(...week.map(c => c.low)),
+            close: week[week.length - 1].close,
+            volume: week.reduce((sum, c) => sum + c.volume, 0)
+          })
+        }
+      }
+      return weeklyCandles
+    }
+
+    return candles
+  }, [])
+
+  // Get rendering settings (cached)
+  const renderingSettings = useMemo(() => {
+    const candleCount = chartData.candles?.length || 0
+    return getRenderingSettings(candleCount)
+  }, [chartData.candles?.length, getRenderingSettings])
+
+  // Optimized candles for rendering
+  const optimizedCandles = useMemo(() => {
+    return getOptimizedCandles(chartData.candles)
+  }, [chartData.candles, getOptimizedCandles])
 
   // Process candlestick data
   const candlestickTrace = useMemo(() => {
-    if (!chartData.candles || chartData.candles.length === 0) {
+    if (!optimizedCandles || optimizedCandles.length === 0) {
       return null
     }
 
-    const dates = chartData.candles.map(candle => candle.timestamp)
-    const opens = chartData.candles.map(candle => candle.open)
-    const highs = chartData.candles.map(candle => candle.high)
-    const lows = chartData.candles.map(candle => candle.low)
-    const closes = chartData.candles.map(candle => candle.close)
+    const dates = optimizedCandles.map(candle => candle.timestamp)
+    const opens = optimizedCandles.map(candle => candle.open)
+    const highs = optimizedCandles.map(candle => candle.high)
+    const lows = optimizedCandles.map(candle => candle.low)
+    const closes = optimizedCandles.map(candle => candle.close)
 
-    // Get optimal rendering settings based on data density
-    const candleCount = chartData.candles.length
-    const settings = getRenderingSettings(candleCount)
+    // Use cached rendering settings
+    const settings = renderingSettings
+
+    // Create detailed hover text with OHLC data and safety checks
+    const hoverText = optimizedCandles.map(candle => {
+      // Safety check: ensure candle data exists and is valid
+      if (!candle || typeof candle.open !== 'number' || typeof candle.close !== 'number') {
+        return 'Invalid data'
+      }
+
+      try {
+        const date = format(new Date(candle.timestamp), 'PPP p')
+        const change = candle.close - candle.open
+        // Safety check: prevent division by zero
+        const changePercent = candle.open !== 0 ? (change / candle.open) * 100 : 0
+        const direction = change >= 0 ? '▲' : '▼'
+        const color = change >= 0 ? 'green' : 'red'
+        
+        return `<b>${date}</b><br>` +
+               `Open: $${candle.open.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
+               `High: $${candle.high.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
+               `Low: $${candle.low.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
+               `Close: $${candle.close.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
+               `<span style="color: ${color};">${direction} $${Math.abs(change).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${changePercent.toFixed(2)}%)</span>` +
+               `${candle.volume && candle.volume > 0 ? `<br>Volume: ${candle.volume.toLocaleString()}` : ''}`
+      } catch (error) {
+        console.warn('Error formatting hover text:', error)
+        return 'Error displaying data'
+      }
+    })
 
     return {
       x: dates,
@@ -151,10 +227,18 @@ const CandlestickChart: React.FC<Props> = ({
       // Set candlestick width dynamically for optimal visibility
       line: { width: settings.lineWidth },
       whiskerwidth: settings.candleWidth,
+      // Enhanced hover functionality with OHLC data
+      text: hoverText,
+      hovertemplate: '%{text}<extra></extra>',
+      hoverlabel: {
+        bgcolor: 'rgba(0, 0, 0, 0.85)',
+        bordercolor: '#30363d',
+        font: { color: '#f0f6fc', size: 12, family: 'monospace' }
+      },
       xaxis: 'x',
       yaxis: 'y',
     }
-  }, [chartData])
+  }, [optimizedCandles, renderingSettings])
 
   // Process trade signals as scatter points
   const tradeSignalTraces = useMemo(() => {
@@ -270,20 +354,36 @@ const CandlestickChart: React.FC<Props> = ({
       return null
     }
 
-    const latest = chartData.candles[chartData.candles.length - 1]
-    const previous = chartData.candles.length > 1 ? chartData.candles[chartData.candles.length - 2] : null
-    
-    const change = previous ? latest.close - previous.close : 0
-    const changePercent = previous ? (change / previous.close) * 100 : 0
+    try {
+      // Safety check: ensure we have valid array bounds
+      const candleCount = chartData.candles.length
+      if (candleCount < 1) return null
+      
+      // Always use original data for current price info (not optimized data) 
+      const latest = chartData.candles[candleCount - 1]
+      const previous = candleCount > 1 ? chartData.candles[candleCount - 2] : null
+      
+      // Safety check: ensure latest candle data is valid
+      if (!latest || typeof latest.close !== 'number') {
+        return null
+      }
+      
+      const change = previous && typeof previous.close === 'number' ? latest.close - previous.close : 0
+      // Safety check: prevent division by zero
+      const changePercent = previous && previous.close !== 0 ? (change / previous.close) * 100 : 0
 
-    return {
-      price: latest.close,
-      change,
-      changePercent,
-      volume: latest.volume,
-      high: latest.high,
-      low: latest.low,
-      open: latest.open
+      return {
+        price: latest.close,
+        change,
+        changePercent,
+        volume: latest.volume || 0,
+        high: latest.high || latest.close,
+        low: latest.low || latest.close, 
+        open: latest.open || latest.close
+      }
+    } catch (error) {
+      console.warn('Error calculating current price info:', error)
+      return null
     }
   }, [chartData])
 
@@ -293,17 +393,35 @@ const CandlestickChart: React.FC<Props> = ({
       return { start: new Date(), end: new Date() }
     }
     
-    const dates = chartData.candles.map(candle => new Date(candle.timestamp))
-    return {
-      start: dates[0],
-      end: dates[dates.length - 1]
+    try {
+      // Safety check: ensure we have valid array bounds
+      const candleCount = chartData.candles.length
+      if (candleCount < 1) {
+        return { start: new Date(), end: new Date() }
+      }
+      
+      // Always use original data for date range (not optimized data)
+      // Safe array access with bounds checking
+      const firstCandle = chartData.candles[0]
+      const lastCandle = chartData.candles[candleCount - 1]
+      
+      if (!firstCandle || !lastCandle) {
+        return { start: new Date(), end: new Date() }
+      }
+      
+      return {
+        start: new Date(firstCandle.timestamp),
+        end: new Date(lastCandle.timestamp)
+      }
+    } catch (error) {
+      console.warn('Error calculating date range:', error)
+      return { start: new Date(), end: new Date() }
     }
   }, [chartData.candles])
 
   // Chart layout configuration - TradingView style
   const layout: Partial<PlotlyLayout> = useMemo(() => {
-    const candleCount = chartData.candles?.length || 0
-    const settings = getRenderingSettings(candleCount)
+    const settings = renderingSettings
     
     return {
       title: `Bitcoin (BTC/USD) - ${source.toUpperCase()}`,
@@ -401,16 +519,17 @@ const CandlestickChart: React.FC<Props> = ({
     height: height,
     // Enable crossfilter-style interactions  
     dragmode: 'pan', // Default to pan mode for click-and-drag behavior like TradingView
-    hovermode: 'x unified',
+    hovermode: 'closest', // Use 'closest' for better individual candlestick hover
     hoverlabel: {
-      bgcolor: 'rgba(22, 27, 34, 0.95)',
+      bgcolor: 'rgba(0, 0, 0, 0.85)',
       bordercolor: '#30363d',
-      font: { color: '#f0f6fc' }
+      font: { color: '#f0f6fc', size: 12, family: 'monospace' },
+      align: 'left'
     },
     // Additional zoom settings
     selectdirection: 'diagonal'
     }
-  }, [source, height, dataDateRange, chartData.candles])
+  }, [source, height, dataDateRange, chartData.candles, renderingSettings])
 
   // Process boundary lines (upper and lower breakout levels)
   const boundaryTraces = useMemo(() => {
@@ -460,6 +579,60 @@ const CandlestickChart: React.FC<Props> = ({
 
   // Combine all traces
   const allTraces = candlestickTrace ? [candlestickTrace, ...boundaryTraces, ...tradeSignalTraces] : []
+
+  // Handle plot initialization and cleanup
+  useEffect(() => {
+    let plotElement: any = null
+    
+    const handleRelayout = () => {
+      // Handle zoom/pan events if needed
+    }
+    
+    if (plotRef.current && plotRef.current.el) {
+      plotElement = plotRef.current.el
+      plotElement.on('plotly_relayout', handleRelayout)
+    }
+    
+    return () => {
+      // Cleanup event listeners to prevent memory leaks
+      if (plotElement && plotElement.removeListener) {
+        plotElement.removeListener('plotly_relayout', handleRelayout)
+      }
+    }
+  }, [])
+
+  // Progressive loading for large datasets
+  useEffect(() => {
+    const candleCount = chartData.candles?.length || 0
+    
+    if (candleCount > 2000) {
+      setIsLoading(true)
+      // Longer processing time for very large datasets (ALL timeframe)
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+        setRenderError(null)
+      }, 300)
+      return () => clearTimeout(timer)
+    } else if (candleCount > 1000) {
+      setIsLoading(true)
+      // Medium processing time for large datasets (1Y timeframe)
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+        setRenderError(null)
+      }, 150)
+      return () => clearTimeout(timer)
+    } else {
+      setIsLoading(false)
+      setRenderError(null)
+    }
+  }, [chartData.candles?.length])
+
+  // Error handling for chart rendering
+  const handlePlotError = useCallback((error: any) => {
+    console.error('Chart rendering error:', error)
+    setRenderError('Failed to render chart. Please try refreshing or selecting a different timeframe.')
+    setIsLoading(false)
+  }, [])
 
   // Chart configuration - TradingView-like toolbar
   const config = {
@@ -537,6 +710,45 @@ const CandlestickChart: React.FC<Props> = ({
       </ChartHeader>
 
       <div style={{ height: `${height - 60}px`, position: 'relative' }}>
+        {isLoading && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 1000,
+            color: 'var(--text-primary)',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            <div style={{ marginBottom: '8px' }}>
+              Loading {chartData.candles?.length || 0} candles...
+            </div>
+            {(chartData.candles?.length || 0) > 2000 && (
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Optimizing for better performance
+              </div>
+            )}
+          </div>
+        )}
+        {renderError && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 1000,
+            color: 'var(--accent-red)',
+            fontSize: '14px',
+            textAlign: 'center',
+            padding: '20px',
+            backgroundColor: 'var(--bg-tertiary)',
+            border: '1px solid var(--border-primary)',
+            borderRadius: '8px'
+          }}>
+            {renderError}
+          </div>
+        )}
         <Plot
           ref={plotRef}
           data={allTraces as any}
@@ -544,13 +756,9 @@ const CandlestickChart: React.FC<Props> = ({
           config={config as any}
           style={{ width: '100%', height: '100%' }}
           useResizeHandler={true}
+          onError={handlePlotError}
           onInitialized={() => {
-            // Enable scroll zoom after initialization
-            if (plotRef.current && plotRef.current.el) {
-              plotRef.current.el.on('plotly_relayout', () => {
-                // Handle zoom/pan events if needed
-              })
-            }
+            setIsLoading(false)
           }}
         />
         <LivePriceDisplay tradeSignals={tradeSignals} />
