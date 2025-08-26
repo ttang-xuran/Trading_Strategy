@@ -299,17 +299,17 @@ const CandlestickChart: React.FC<Props> = ({
       close: closes,
       type: 'candlestick' as const,
       name: 'BTC/USD',
-      // SIMPLE THICK CANDLESTICKS THAT ACTUALLY WORK
+      // FORCE MAXIMUM THICKNESS FOR ALL TIMEFRAMES
       increasing: { 
-        line: { color: '#26a69a', width: 4 },
+        line: { color: '#26a69a', width: 8 },
         fillcolor: '#26a69a'
       },
       decreasing: { 
-        line: { color: '#ef5350', width: 4 },
+        line: { color: '#ef5350', width: 8 },
         fillcolor: '#ef5350'
       },
-      line: { width: 4 },
-      whiskerwidth: 0.8,
+      line: { width: 8 },
+      whiskerwidth: 1.0,
       // WORKING HOVER TOOLTIPS
       hovertemplate: '<b>Date: %{x}</b><br>Open: $%{open:,.2f}<br>High: $%{high:,.2f}<br>Low: $%{low:,.2f}<br>Close: $%{close:,.2f}<extra></extra>',
       hoverinfo: 'all'
