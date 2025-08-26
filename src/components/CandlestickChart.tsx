@@ -87,7 +87,7 @@ const CandlestickChart: React.FC<Props> = ({
       // ALL timeframe - maximum thickness, minimal gaps
       return {
         candleWidth: 0.95,
-        lineWidth: 3,
+        whiskerWidth: 1.0,  // Maximum whisker width for thick OHLC lines
         optimization: true,
         tickDensity: 8
       }
@@ -95,7 +95,7 @@ const CandlestickChart: React.FC<Props> = ({
       // 1Y timeframe - thick candles
       return {
         candleWidth: 0.9,
-        lineWidth: 2.5,
+        whiskerWidth: 0.9,
         optimization: true,
         tickDensity: 10
       }
@@ -103,7 +103,7 @@ const CandlestickChart: React.FC<Props> = ({
       // 6M timeframe - wider candles
       return {
         candleWidth: 0.85,
-        lineWidth: 2,
+        whiskerWidth: 0.8,
         optimization: false,
         tickDensity: 15
       }
@@ -111,7 +111,7 @@ const CandlestickChart: React.FC<Props> = ({
       // Shorter timeframes - standard width
       return {
         candleWidth: 0.8,
-        lineWidth: 1.5,
+        whiskerWidth: 0.6,
         optimization: false,
         tickDensity: 20
       }
@@ -180,33 +180,7 @@ const CandlestickChart: React.FC<Props> = ({
     // Use cached rendering settings
     const settings = renderingSettings
 
-    // Create detailed hover text with OHLC data and safety checks
-    const hoverText = optimizedCandles.map(candle => {
-      // Safety check: ensure candle data exists and is valid
-      if (!candle || typeof candle.open !== 'number' || typeof candle.close !== 'number') {
-        return 'Invalid data'
-      }
-
-      try {
-        const date = format(new Date(candle.timestamp), 'PPP p')
-        const change = candle.close - candle.open
-        // Safety check: prevent division by zero
-        const changePercent = candle.open !== 0 ? (change / candle.open) * 100 : 0
-        const direction = change >= 0 ? '▲' : '▼'
-        const color = change >= 0 ? 'green' : 'red'
-        
-        return `<b>${date}</b><br>` +
-               `Open: $${candle.open.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
-               `High: $${candle.high.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
-               `Low: $${candle.low.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
-               `Close: $${candle.close.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}<br>` +
-               `<span style="color: ${color};">${direction} $${Math.abs(change).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${changePercent.toFixed(2)}%)</span>` +
-               `${candle.volume && candle.volume > 0 ? `<br>Volume: ${candle.volume.toLocaleString()}` : ''}`
-      } catch (error) {
-        console.warn('Error formatting hover text:', error)
-        return 'Error displaying data'
-      }
-    })
+    // Removed unused hoverText - using hovertemplate instead
 
     return {
       x: dates,
@@ -216,43 +190,42 @@ const CandlestickChart: React.FC<Props> = ({
       close: closes,
       type: 'candlestick' as const,
       name: 'BTC/USD',
-      // Force thick candlesticks by setting explicit line widths
+      // Proper candlestick styling for thick bars
       increasing: { 
         line: { 
           color: '#238636', 
-          width: 3  // Force thick lines
+          width: 0  // Set to 0 for filled candlesticks
         },
         fillcolor: '#238636'
       },
       decreasing: { 
         line: { 
           color: '#da3633', 
-          width: 3  // Force thick lines
+          width: 0  // Set to 0 for filled candlesticks  
         },
         fillcolor: '#da3633'
       },
-      // Force candlestick body width - use higher values for compressed timeframes
-      line: { 
-        width: optimizedCandles.length > 1000 ? 5 : 3  // Thicker for dense data
-      },
-      // Custom hover template with proper OHLC data
+      // Critical: whiskerwidth controls the OHLC line thickness
+      whiskerwidth: settings.whiskerWidth,
+      // Remove conflicting line width setting
+      // line: { width: ... } // This was causing issues
+      // Fixed hover template for OHLC data
       hovertemplate: 
-        '<b>Date: %{x}</b><br>' +
+        '<b>%{x|%Y-%m-%d %H:%M}</b><br>' +
         '<br>' +
         'Open: <b>$%{open:,.2f}</b><br>' +
         'High: <b>$%{high:,.2f}</b><br>' +
         'Low: <b>$%{low:,.2f}</b><br>' +
         'Close: <b>$%{close:,.2f}</b><br>' +
         '<br>' +
-        'Change: <b>$%{customdata.change:+,.2f}</b><br>' +
-        'Change %: <b>%{customdata.changePercent:+.2f}%</b><br>' +
-        '%{customdata.volume > 0 ? "Volume: <b>%{customdata.volume:,}</b>" : ""}' +
+        'Change: <b>$%{customdata[0]:+,.2f}</b><br>' +
+        'Change %: <b>%{customdata[1]:+.2f}%</b><br>' +
         '<extra></extra>',
-      customdata: optimizedCandles.map(candle => ({
-        change: candle.close - candle.open,
-        changePercent: candle.open !== 0 ? ((candle.close - candle.open) / candle.open) * 100 : 0,
-        volume: candle.volume || 0
-      })),
+      customdata: optimizedCandles.map(candle => [
+        candle.close - candle.open,  // change
+        candle.open !== 0 ? ((candle.close - candle.open) / candle.open) * 100 : 0  // changePercent
+      ]),
+      // Enhanced hover styling
       hoverlabel: {
         bgcolor: 'rgba(0, 0, 0, 0.9)',
         bordercolor: '#ffffff',
@@ -263,6 +236,8 @@ const CandlestickChart: React.FC<Props> = ({
           family: 'Monaco, Consolas, monospace' 
         }
       },
+      // Ensure proper hover detection
+      hoverinfo: 'skip', // Use hovertemplate instead
       xaxis: 'x',
       yaxis: 'y',
     }
@@ -467,13 +442,13 @@ const CandlestickChart: React.FC<Props> = ({
         spikethickness: 1,
         // Optimize tick density based on data density
         nticks: settings.tickDensity,
-        // Force better candlestick spacing and rendering
+        // Enable horizontal dragging and navigation
         fixedrange: false,
-        autorange: true,
-        // Set default range to 6 months from latest data
+        autorange: false,  // Disable autorange to allow manual navigation
+        // Set default range to 6 months from latest data (but allow dragging beyond)
         range: [
-          new Date(dataDateRange.end.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          dataDateRange.end.toISOString().split('T')[0]
+          new Date(dataDateRange.end.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+          dataDateRange.end.toISOString()
         ],
         // Enable better date range controls - use actual data dates
         rangeselector: {
@@ -550,10 +525,12 @@ const CandlestickChart: React.FC<Props> = ({
     height: height,
     // Enable crossfilter-style interactions  
     dragmode: 'pan', // Default to pan mode for click-and-drag behavior like TradingView
-    hovermode: 'closest', // Use 'closest' for better individual candlestick hover
-    // Force better candlestick rendering
-    barmode: 'overlay',
-    bargap: 0.1, // Reduce gap between bars
+    hovermode: 'x unified', // Better hover mode for candlesticks
+    // Enable smooth panning and navigation
+    scrollZoom: true,
+    doubleClick: 'reset+autosize',
+    // Optimized settings for candlestick rendering
+    showlegend: true,
     hoverlabel: {
       bgcolor: 'rgba(0, 0, 0, 0.85)',
       bordercolor: '#30363d',
@@ -678,14 +655,6 @@ const CandlestickChart: React.FC<Props> = ({
     staticPlot: false,
     // Improve rendering performance for large datasets
     plotGlPixelRatio: 2,
-    // Force better candlestick rendering
-    toImageButtonOptions: {
-      format: 'png',
-      filename: `btc-strategy-chart-${source}`,
-      height: 800,
-      width: 1400,
-      scale: 2
-    },
     modeBarButtonsToAdd: [
       {
         name: 'Reset View',
@@ -748,6 +717,14 @@ const CandlestickChart: React.FC<Props> = ({
         
         <TimeframeSelector>
           <TimeframeButton active>{chartData.timeframe}</TimeframeButton>
+          <div style={{ 
+            fontSize: '11px', 
+            color: 'var(--text-secondary)', 
+            marginLeft: '12px',
+            opacity: 0.8 
+          }}>
+            💡 Click & drag to navigate history
+          </div>
         </TimeframeSelector>
       </ChartHeader>
 
@@ -799,8 +776,15 @@ const CandlestickChart: React.FC<Props> = ({
           style={{ width: '100%', height: '100%' }}
           useResizeHandler={true}
           onError={handlePlotError}
-          onInitialized={() => {
+          onInitialized={(figure) => {
             setIsLoading(false)
+            // Ensure pan mode is properly set
+            if (figure && figure.on) {
+              figure.on('plotly_relayout', (eventdata: any) => {
+                // Handle pan/zoom events
+                console.log('Chart navigation:', eventdata)
+              })
+            }
           }}
         />
         <LivePriceDisplay tradeSignals={tradeSignals} />
