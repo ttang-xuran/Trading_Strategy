@@ -216,24 +216,52 @@ const CandlestickChart: React.FC<Props> = ({
       close: closes,
       type: 'candlestick' as const,
       name: 'BTC/USD',
+      // Force thick candlesticks by setting explicit line widths
       increasing: { 
-        line: { color: '#238636', width: settings.lineWidth },
+        line: { 
+          color: '#238636', 
+          width: 3  // Force thick lines
+        },
         fillcolor: '#238636'
       },
       decreasing: { 
-        line: { color: '#da3633', width: settings.lineWidth },
+        line: { 
+          color: '#da3633', 
+          width: 3  // Force thick lines
+        },
         fillcolor: '#da3633'
       },
-      // Set candlestick width dynamically for optimal visibility
-      line: { width: settings.lineWidth },
-      whiskerwidth: settings.candleWidth,
-      // Enhanced hover functionality with OHLC data
-      text: hoverText,
-      hovertemplate: '%{text}<extra></extra>',
+      // Force candlestick body width - use higher values for compressed timeframes
+      line: { 
+        width: optimizedCandles.length > 1000 ? 5 : 3  // Thicker for dense data
+      },
+      // Custom hover template with proper OHLC data
+      hovertemplate: 
+        '<b>Date: %{x}</b><br>' +
+        '<br>' +
+        'Open: <b>$%{open:,.2f}</b><br>' +
+        'High: <b>$%{high:,.2f}</b><br>' +
+        'Low: <b>$%{low:,.2f}</b><br>' +
+        'Close: <b>$%{close:,.2f}</b><br>' +
+        '<br>' +
+        'Change: <b>$%{customdata.change:+,.2f}</b><br>' +
+        'Change %: <b>%{customdata.changePercent:+.2f}%</b><br>' +
+        '%{customdata.volume > 0 ? "Volume: <b>%{customdata.volume:,}</b>" : ""}' +
+        '<extra></extra>',
+      customdata: optimizedCandles.map(candle => ({
+        change: candle.close - candle.open,
+        changePercent: candle.open !== 0 ? ((candle.close - candle.open) / candle.open) * 100 : 0,
+        volume: candle.volume || 0
+      })),
       hoverlabel: {
-        bgcolor: 'rgba(0, 0, 0, 0.85)',
-        bordercolor: '#30363d',
-        font: { color: '#f0f6fc', size: 12, family: 'monospace' }
+        bgcolor: 'rgba(0, 0, 0, 0.9)',
+        bordercolor: '#ffffff',
+        borderwidth: 1,
+        font: { 
+          color: '#ffffff', 
+          size: 13, 
+          family: 'Monaco, Consolas, monospace' 
+        }
       },
       xaxis: 'x',
       yaxis: 'y',
@@ -439,6 +467,9 @@ const CandlestickChart: React.FC<Props> = ({
         spikethickness: 1,
         // Optimize tick density based on data density
         nticks: settings.tickDensity,
+        // Force better candlestick spacing and rendering
+        fixedrange: false,
+        autorange: true,
         // Set default range to 6 months from latest data
         range: [
           new Date(dataDateRange.end.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -520,6 +551,9 @@ const CandlestickChart: React.FC<Props> = ({
     // Enable crossfilter-style interactions  
     dragmode: 'pan', // Default to pan mode for click-and-drag behavior like TradingView
     hovermode: 'closest', // Use 'closest' for better individual candlestick hover
+    // Force better candlestick rendering
+    barmode: 'overlay',
+    bargap: 0.1, // Reduce gap between bars
     hoverlabel: {
       bgcolor: 'rgba(0, 0, 0, 0.85)',
       bordercolor: '#30363d',
@@ -644,6 +678,14 @@ const CandlestickChart: React.FC<Props> = ({
     staticPlot: false,
     // Improve rendering performance for large datasets
     plotGlPixelRatio: 2,
+    // Force better candlestick rendering
+    toImageButtonOptions: {
+      format: 'png',
+      filename: `btc-strategy-chart-${source}`,
+      height: 800,
+      width: 1400,
+      scale: 2
+    },
     modeBarButtonsToAdd: [
       {
         name: 'Reset View',
