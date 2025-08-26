@@ -54,115 +54,49 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     }
   }
 
-  // Load historical data from live API
+  // Load historical data using livePriceService for REAL market data
   const loadHistoricalData = async (timeframe: TimeRange = '6M'): Promise<CandleData[]> => {
     try {
       setLoading(true)
+      console.log(`Loading REAL historical data from ${source} for timeframe ${timeframe}`)
       
-      // Get historical data based on timeframe
+      // Get historical data based on timeframe using the reliable livePriceService
       const days = getTimeframeDays(timeframe)
-      const endTime = Math.floor(Date.now() / 1000)
-      const startTime = endTime - (days * 24 * 60 * 60)
+      const historicalData = await livePriceService.getHistoricalData(source, days)
       
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${startTime}&to=${endTime}`
-      )
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch historical data')
+      if (!historicalData || historicalData.length === 0) {
+        throw new Error('No historical data received from livePriceService')
       }
       
-      const data = await response.json()
-      const prices = data.prices || []
+      // Convert the livePriceService data format to our CandleData format
+      const candles: CandleData[] = historicalData.map(item => ({
+        date: item.date ? item.date.toISOString().split('T')[0] : new Date(item.timestamp).toISOString().split('T')[0],
+        open: item.open,
+        high: item.high,
+        low: item.low,
+        close: item.close,
+        timestamp: item.date ? item.date.getTime() : item.timestamp
+      }))
       
-      // Convert to daily OHLC data
-      const dailyData: { [key: string]: { prices: number[], timestamps: number[] } } = {}
-      
-      prices.forEach(([timestamp, price]: [number, number]) => {
-        const date = new Date(timestamp).toISOString().split('T')[0]
-        if (!dailyData[date]) {
-          dailyData[date] = { prices: [], timestamps: [] }
-        }
-        dailyData[date].prices.push(price)
-        dailyData[date].timestamps.push(timestamp)
-      })
-      
-      // Create OHLC candles
-      const candles: CandleData[] = Object.entries(dailyData)
-        .map(([date, dayData]) => {
-          const prices = dayData.prices
-          const open = prices[0]
-          const close = prices[prices.length - 1]
-          const high = Math.max(...prices)
-          const low = Math.min(...prices)
-          
-          return {
-            date,
-            open,
-            high,
-            low,
-            close,
-            timestamp: dayData.timestamps[0]
-          }
-        })
-        .sort((a, b) => a.timestamp - b.timestamp)
-      
-      return candles
+      console.log(`Successfully loaded ${candles.length} REAL candles from ${source} livePriceService`)
+      return candles.sort((a, b) => a.timestamp - b.timestamp)
       
     } catch (error) {
-      console.error('Failed to load historical data from CoinGecko API:', error)
-      console.error('Falling back to generated data starting from current price:', currentPrice)
-      // Fallback to static data if API fails
-      return generateFallbackData(currentPrice)
+      console.error(`Failed to load REAL historical data from ${source}:`, error)
+      
+      // IMPORTANT: DO NOT fall back to random data - throw the error
+      // This ensures we only show real market data, never simulated data
+      throw new Error(`Unable to load real historical data from ${source}: ${error.message}`)
     } finally {
       setLoading(false)
     }
   }
 
-  // Fallback data if API fails
-  const generateFallbackData = (livePriceHint?: number): CandleData[] => {
-    const data: CandleData[] = []
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - 90)
-    
-    // Start from current live price if available, otherwise use recent realistic price
-    let startingPrice = livePriceHint || currentPrice || 117000
-    
-    const today = new Date()
-    const daysToGenerate = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    
-    for (let i = 0; i < daysToGenerate; i++) {
-      const date = new Date(startDate)
-      date.setDate(date.getDate() + i)
-      
-      // Calculate how much we need to evolve to reach current price
-      const progressRatio = i / daysToGenerate
-      const targetPrice = livePriceHint || currentPrice || 117000
-      const priceEvolution = (targetPrice - (livePriceHint || currentPrice || 117000)) * progressRatio
-      
-      const change = (Math.random() - 0.5) * 0.03 * startingPrice + priceEvolution / daysToGenerate
-      const newPrice = startingPrice + change
-      
-      const high = Math.max(startingPrice, newPrice) + Math.random() * 0.008 * newPrice
-      const low = Math.min(startingPrice, newPrice) - Math.random() * 0.008 * newPrice
-      
-      // If this is today's candle, use live price for close
-      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0]
-      const finalClose = isToday ? (currentPrice || newPrice) : newPrice
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        open: startingPrice,
-        high: isToday ? Math.max(high, finalClose) : high,
-        low: isToday ? Math.min(low, finalClose) : low,
-        close: finalClose,
-        timestamp: date.getTime()
-      })
-      
-      startingPrice = newPrice
-    }
-    
-    return data
+  // Show error message instead of generating fake data
+  const showDataError = (error: string) => {
+    console.error('Cannot load real historical data:', error)
+    setCandleData([]) // Clear any existing data
+    setLoading(false)
   }
 
   // Update current day's candle with live price
@@ -218,17 +152,27 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       console.error('Failed to refresh live price on timeframe change:', error)
     }
     
-    const data = await loadHistoricalData(timeframe)
-    setCandleData(data)
-    setAllHistoricalData(data)
+    try {
+      const data = await loadHistoricalData(timeframe)
+      setCandleData(data)
+      setAllHistoricalData(data)
+    } catch (error) {
+      console.error(`Failed to load historical data for timeframe ${timeframe}:`, error)
+      showDataError(error.message)
+    }
   }
 
   // Load data when source or timeframe changes
   useEffect(() => {
-    loadHistoricalData(selectedTimeRange).then(data => {
-      setCandleData(data)
-      setAllHistoricalData(data)
-    })
+    loadHistoricalData(selectedTimeRange)
+      .then(data => {
+        setCandleData(data)
+        setAllHistoricalData(data)
+      })
+      .catch(error => {
+        console.error(`Failed to load initial historical data from ${source}:`, error)
+        showDataError(error.message)
+      })
     
     // Sync initial timeframe with parent
     if (onTimeframeChange) {
@@ -693,7 +637,40 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
           textAlign: 'center'
         }}>
           <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📈</div>
-          <div>Loading live {source} data...</div>
+          <div>Loading REAL {source} market data...</div>
+          <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.8 }}>
+            No simulated data - only authentic market prices
+          </div>
+        </div>
+      )}
+
+      {/* Error indicator - when real data cannot be loaded */}
+      {!loading && candleData.length === 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: '#f85149',
+          textAlign: 'center',
+          padding: '2rem',
+          backgroundColor: 'rgba(22, 27, 34, 0.95)',
+          border: '1px solid #30363d',
+          borderRadius: '8px',
+          maxWidth: '400px'
+        }}>
+          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚠️</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            Real Market Data Unavailable
+          </div>
+          <div style={{ fontSize: '0.9rem', color: '#8b949e', marginBottom: '1rem' }}>
+            Unable to load authentic historical Bitcoin data from {source.toUpperCase()}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#7d8590' }}>
+            • Check internet connection<br/>
+            • Try selecting a different data source<br/>
+            • We never show simulated data - only real market prices
+          </div>
         </div>
       )}
     </div>
