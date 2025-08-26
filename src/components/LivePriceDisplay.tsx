@@ -183,7 +183,12 @@ const LivePriceDisplay: React.FC<Props> = ({ tradeSignals }) => {
     <PriceContainer>
       <PriceRow>
         <PriceLabel>BTC Live:</PriceLabel>
-        <PriceValue>{formatPrice(livePrice.price)}</PriceValue>
+        <PriceValue style={{ 
+          color: livePrice.price === 0 ? '#f97316' : 
+                 !livePrice.isValid ? '#f59e0b' : '#ffffff'
+        }}>
+          {livePrice.price === 0 ? 'Loading...' : formatPrice(livePrice.price)}
+        </PriceValue>
         <RefreshButton onClick={fetchLivePrice} disabled={isRefreshing}>
           {isRefreshing ? '...' : '↻'}
         </RefreshButton>
@@ -216,6 +221,17 @@ const LivePriceDisplay: React.FC<Props> = ({ tradeSignals }) => {
 
       <LastUpdate>
         Last updated: {formatTime(livePrice.timestamp)} ({livePrice.source})
+        {livePrice.confidence !== undefined && (
+          <div style={{ 
+            fontSize: '10px', 
+            marginTop: '2px',
+            color: livePrice.confidence >= 80 ? '#10b981' : 
+                   livePrice.confidence >= 60 ? '#f59e0b' : 
+                   livePrice.confidence >= 20 ? '#f97316' : '#ef4444'
+          }}>
+            Data Quality: {livePrice.confidence}% • {livePrice.isValid ? 'Live' : 'Cached'}
+          </div>
+        )}
       </LastUpdate>
     </PriceContainer>
   )

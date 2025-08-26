@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bitcoin API Test - Production System</title>
+    <meta charset="UTF-8">
+    <style>
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #0d1117; 
+            color: #f0f6fc; 
+            padding: 20px; 
+            margin: 0;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+        }
+        .card { 
+            background: #161b22; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border: 1px solid #30363d;
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            gap: 20px; 
+        }
+        .status { 
+            display: inline-block; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            font-weight: bold;
+        }
+        .success { background: #1f6f4b; color: white; }
+        .warning { background: #b45309; color: white; }
+        .error { background: #d1242f; color: white; }
+        .info { background: #0366d6; color: white; }
+        button { 
+            background: #238636; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { background: #2ea043; }
+        button:disabled { background: #484f58; cursor: not-allowed; }
+        pre { 
+            background: #0d1117; 
+            padding: 15px; 
+            border-radius: 6px; 
+            overflow-x: auto; 
+            font-size: 12px;
+            border: 1px solid #30363d;
+        }
+        .price { font-size: 24px; font-weight: bold; color: #7c3aed; }
+        .change-positive { color: #3fb950; }
+        .change-negative { color: #f85149; }
+        .confidence-high { color: #3fb950; }
+        .confidence-medium { color: #d29922; }
+        .confidence-low { color: #f85149; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Production Bitcoin Data System Test</h1>
+        <p>Testing the new robust Bitcoin price fetching system with intelligent fallback chain, CORS handling, and data validation.</p>
+        
+        <div class="card">
+            <h2>Current Bitcoin Price</h2>
+            <div id="currentPrice">Loading...</div>
+            <button onclick="fetchCurrentPrice()">Refresh Price</button>
+            <button onclick="fetchWithSource('coingecko')">CoinGecko</button>
+            <button onclick="fetchWithSource('binance')">Binance</button>
+            <button onclick="fetchWithSource('coinbase')">Coinbase</button>
+            <button onclick="fetchWithSource('bitstamp')">Bitstamp</button>
+        </div>
+
+        <div class="card">
+            <h2>API Health Status</h2>
+            <div id="apiHealth">Loading...</div>
+            <button onclick="refreshHealth()">Refresh Health</button>
+            <button onclick="resetHealth()">Reset Health</button>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Source Test Results</h3>
+                <div id="sourceResults"></div>
+                <button onclick="testAllSources()">Test All Sources</button>
+            </div>
+
+            <div class="card">
+                <h3>Fallback Chain Test</h3>
+                <div id="fallbackResults"></div>
+                <button onclick="testFallbackChain()">Test Fallback Logic</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Live System Log</h2>
+            <pre id="systemLog"></pre>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the live price service
+        import { livePriceService } from './src/services/livePriceService.js'
+
+        // Make it globally available for testing
+        window.livePriceService = livePriceService
+        window.systemLog = []
+
+        function log(message, level = 'info') {
+            const timestamp = new Date().toLocaleTimeString()
+            const logEntry = `[${timestamp}] ${level.toUpperCase()}: ${message}`
+            window.systemLog.push(logEntry)
+            
+            // Keep only last 50 entries
+            if (window.systemLog.length > 50) {
+                window.systemLog = window.systemLog.slice(-50)
+            }
+            
+            document.getElementById('systemLog').textContent = window.systemLog.join('\\n')
+            console.log(logEntry)
+        }
+
+        window.log = log
+
+        // Format price with confidence indicator
+        function formatPriceData(data) {
+            const confidenceClass = data.confidence >= 80 ? 'confidence-high' : 
+                                   data.confidence >= 60 ? 'confidence-medium' : 'confidence-low'
+            
+            const statusClass = data.isValid ? 'success' : 'warning'
+            const statusText = data.isValid ? 'Live' : 'Cached'
+            
+            return `
+                <div class="price">$${data.price.toLocaleString()}</div>
+                <div class="${data.changePercent24h >= 0 ? 'change-positive' : 'change-negative'}">
+                    ${data.changePercent24h >= 0 ? '+' : ''}${data.changePercent24h.toFixed(2)}%
+                    (${data.changePercent24h >= 0 ? '+' : ''}$${data.change24h.toFixed(2)})
+                </div>
+                <div>
+                    <span class="status ${statusClass}">${statusText}</span>
+                    <span class="status info">${data.source}</span>
+                    <span class="status ${confidenceClass}">${data.confidence}% confidence</span>
+                </div>
+                <div style="font-size: 12px; color: #7d8590; margin-top: 10px;">
+                    Updated: ${new Date(data.timestamp).toLocaleString()}
+                </div>
+            `
+        }
+
+        // Fetch current price
+        window.fetchCurrentPrice = async function() {
+            try {
+                log('Fetching current Bitcoin price...')
+                const data = await livePriceService.getLiveBitcoinPrice()
+                document.getElementById('currentPrice').innerHTML = formatPriceData(data)
+                log(`Price fetched successfully: $${data.price} from ${data.source}`)
+            } catch (error) {
+                log(`Failed to fetch price: ${error.message}`, 'error')
+                document.getElementById('currentPrice').innerHTML = `<div class="status error">Error: ${error.message}</div>`
+            }
+        }
+
+        // Fetch with specific source
+        window.fetchWithSource = async function(source) {
+            try {
+                log(`Fetching price from ${source}...`)
+                const data = await livePriceService.getLiveBitcoinPrice(source)
+                document.getElementById('currentPrice').innerHTML = formatPriceData(data)
+                log(`Price fetched from ${source}: $${data.price}`)
+            } catch (error) {
+                log(`Failed to fetch from ${source}: ${error.message}`, 'error')
+                document.getElementById('currentPrice').innerHTML = `<div class="status error">Error: ${error.message}</div>`
+            }
+        }
+
+        // Refresh API health
+        window.refreshHealth = function() {
+            const health = livePriceService.getApiHealthStatus()
+            let html = ''
+            
+            Object.entries(health).forEach(([source, status]) => {
+                const healthClass = status.isHealthy ? 'success' : 'error'
+                const lastSuccess = status.lastSuccess === 0 ? 'Never' : 
+                                   `${Math.floor((Date.now() - status.lastSuccess) / 1000)}s ago`
+                
+                html += `
+                    <div style="margin: 10px 0;">
+                        <strong style="text-transform: capitalize;">${source}</strong>
+                        <span class="status ${healthClass}">${status.isHealthy ? 'Healthy' : 'Unhealthy'}</span>
+                        <span class="status info">Failures: ${status.failureCount}</span>
+                        <span class="status info">Last Success: ${lastSuccess}</span>
+                        ${status.lastError ? `<div style="font-size: 12px; color: #f85149; margin-top: 5px;">Error: ${status.lastError}</div>` : ''}
+                    </div>
+                `
+            })
+            
+            document.getElementById('apiHealth').innerHTML = html
+            log('API health status refreshed')
+        }
+
+        // Reset health status
+        window.resetHealth = function() {
+            livePriceService.resetApiHealth()
+            refreshHealth()
+            log('API health status reset')
+        }
+
+        // Test all sources individually
+        window.testAllSources = async function() {
+            const sources = ['coingecko', 'binance', 'coinbase', 'bitstamp']
+            let html = ''
+            
+            for (const source of sources) {
+                try {
+                    log(`Testing ${source}...`)
+                    const startTime = Date.now()
+                    const data = await livePriceService.getLiveBitcoinPrice(source)
+                    const duration = Date.now() - startTime
+                    
+                    html += `
+                        <div style="margin: 10px 0; padding: 10px; border: 1px solid #30363d; border-radius: 4px;">
+                            <strong style="text-transform: capitalize;">${source}</strong>
+                            <span class="status success">✓ Success</span>
+                            <span class="status info">${duration}ms</span>
+                            <div style="font-size: 12px; margin-top: 5px;">
+                                Price: $${data.price.toLocaleString()} | Confidence: ${data.confidence}% | ${data.isValid ? 'Live' : 'Cached'}
+                            </div>
+                        </div>
+                    `
+                    log(`${source} test successful: $${data.price} (${duration}ms)`)
+                } catch (error) {
+                    html += `
+                        <div style="margin: 10px 0; padding: 10px; border: 1px solid #30363d; border-radius: 4px;">
+                            <strong style="text-transform: capitalize;">${source}</strong>
+                            <span class="status error">✗ Failed</span>
+                            <div style="font-size: 12px; color: #f85149; margin-top: 5px;">
+                                Error: ${error.message}
+                            </div>
+                        </div>
+                    `
+                    log(`${source} test failed: ${error.message}`, 'error')
+                }
+            }
+            
+            document.getElementById('sourceResults').innerHTML = html
+        }
+
+        // Test fallback chain logic
+        window.testFallbackChain = async function() {
+            log('Testing intelligent fallback chain...')
+            
+            // First, reset health to ensure clean test
+            livePriceService.resetApiHealth()
+            
+            try {
+                // Test with no preferred source (should use intelligent chain)
+                const result1 = await livePriceService.getLiveBitcoinPrice()
+                log(`Fallback chain test 1: ${result1.source} provided $${result1.price}`)
+                
+                // Test with preferred source
+                const result2 = await livePriceService.getLiveBitcoinPrice('binance')
+                log(`Fallback chain test 2: Requested Binance, got ${result2.source}`)
+                
+                document.getElementById('fallbackResults').innerHTML = `
+                    <div style="margin: 10px 0;">
+                        <div><strong>Test 1 (Auto):</strong> ${result1.source} - $${result1.price.toLocaleString()}</div>
+                        <div><strong>Test 2 (Binance):</strong> ${result2.source} - $${result2.price.toLocaleString()}</div>
+                        <div class="status success" style="margin-top: 10px;">Fallback chain working correctly</div>
+                    </div>
+                `
+            } catch (error) {
+                log(`Fallback chain test failed: ${error.message}`, 'error')
+                document.getElementById('fallbackResults').innerHTML = `<div class="status error">Error: ${error.message}</div>`
+            }
+        }
+
+        // Clear log
+        window.clearLog = function() {
+            window.systemLog = []
+            document.getElementById('systemLog').textContent = ''
+        }
+
+        // Initialize
+        log('Production Bitcoin Data System Test Page Loaded')
+        fetchCurrentPrice()
+        refreshHealth()
+    </script>
+</body>
+</html>

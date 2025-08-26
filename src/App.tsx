@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import LiveHistoricalChart from './components/LiveHistoricalChart'
+import DataQualityMonitor from './components/DataQualityMonitor'
 import { livePriceService } from './services/livePriceService'
 import './index.css'
 
@@ -436,10 +437,21 @@ function App() {
   }, [])
 
   // Real live price updates from selected source
+  // Make selectedSource globally available for components
+  useEffect(() => {
+    (window as any).selectedDataSource = selectedSource
+  }, [selectedSource])
+
   useEffect(() => {
     const fetchLivePrice = async () => {
       try {
         const priceData = await livePriceService.getLiveBitcoinPrice(selectedSource)
+        console.log('App received live price data:', {
+          price: priceData.price,
+          source: priceData.source,
+          confidence: priceData.confidence,
+          isValid: priceData.isValid
+        })
         setLivePrice({
           price: priceData.price,
           change24h: priceData.change24h || 0,
@@ -547,6 +559,9 @@ function App() {
           <div style={{ marginLeft: 'auto', fontSize: '0.9rem', color: '#7d8590' }}>
             Selected: {selectedSource.toUpperCase()} | Last updated: {currentTime.toLocaleString()}
           </div>
+          
+          {/* Data Quality Monitor */}
+          <DataQualityMonitor className="ml-4" />
         </div>
 
         {/* Performance Metrics - 6 cards in a row */}

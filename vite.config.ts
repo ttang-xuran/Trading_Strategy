@@ -12,6 +12,34 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // CORS Proxy for external Bitcoin APIs
+      '/proxy/coingecko': {
+        target: 'https://api.coingecko.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy\/coingecko/, ''),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; BTC-Strategy/1.0)',
+        },
+      },
+      '/proxy/binance': {
+        target: 'https://api.binance.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy\/binance/, ''),
+      },
+      '/proxy/coinbase': {
+        target: 'https://api.coinbase.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy\/coinbase/, ''),
+      },
+      '/proxy/bitstamp': {
+        target: 'https://www.bitstamp.net',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy\/bitstamp/, ''),
+      },
     },
   },
   build: {
