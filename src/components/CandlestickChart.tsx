@@ -309,7 +309,7 @@ const CandlestickChart: React.FC<Props> = ({
         fillcolor: '#ef5350'
       },
       line: { width: 4 },
-      whiskerwidth: 0.8
+      whiskerwidth: 0.8,
       // WORKING HOVER TOOLTIPS
       hovertemplate: '<b>Date: %{x}</b><br>Open: $%{open:,.2f}<br>High: $%{high:,.2f}<br>Low: $%{low:,.2f}<br>Close: $%{close:,.2f}<extra></extra>',
       hoverinfo: 'all'
