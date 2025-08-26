@@ -299,55 +299,20 @@ const CandlestickChart: React.FC<Props> = ({
       close: closes,
       type: 'candlestick' as const,
       name: 'BTC/USD',
-      // DEFINITIVE FIX: Maximum thickness configuration for all compressed timeframes
+      // SIMPLE THICK CANDLESTICKS THAT ACTUALLY WORK
       increasing: { 
-        line: { 
-          color: '#00C851',  // Brighter green for better visibility
-          width: 2  // Thick wicks for compressed data
-        },
-        fillcolor: '#00C851'
+        line: { color: '#26a69a', width: 4 },
+        fillcolor: '#26a69a'
       },
       decreasing: { 
-        line: { 
-          color: '#FF4444',  // Brighter red for better visibility 
-          width: 2  // Thick wicks for compressed data
-        },
-        fillcolor: '#FF4444'
+        line: { color: '#ef5350', width: 4 },
+        fillcolor: '#ef5350'
       },
-      // CRITICAL: Force maximum whisker width for compressed timeframes
-      whiskerwidth: settings.whiskerWidth,  // Use full calculated value
-      // PROFESSIONAL hover template - clean and reliable
-      hovertemplate: 
-        '<b>%{x|%b %d, %Y}</b><br>' +
-        '<span style="color:#00C851">▲ Open:</span> $%{open:,.2f}<br>' +
-        '<span style="color:#FFB347">▲ High:</span> $%{high:,.2f}<br>' +
-        '<span style="color:#87CEEB">▼ Low:</span> $%{low:,.2f}<br>' +
-        '<span style="color:#FF4444">▼ Close:</span> $%{close:,.2f}<br>' +
-        '<span style="color:%{customdata[2]}">Change:</span> $%{customdata[0]:+,.2f} (%{customdata[1]:+.2f}%)' +
-        '<extra></extra>',
-      customdata: optimizedCandles.map(candle => {
-        const change = candle.close - candle.open
-        const changePercent = candle.open !== 0 ? (change / candle.open) * 100 : 0
-        const changeColor = change >= 0 ? '#00C851' : '#FF4444'
-        return [change, changePercent, changeColor]
-      }),
-      // Professional hover styling
-      hoverlabel: {
-        bgcolor: 'rgba(13, 17, 23, 0.95)',
-        bordercolor: '#30363d',
-        borderwidth: 1,
-        font: { 
-          color: '#f0f6fc', 
-          size: 13,
-          family: 'SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, monospace'
-        },
-        align: 'left'
-      },
-      // Enable all hover features
-      hoverinfo: 'all',
-      // Additional rendering optimization for thick candlesticks
-      opacity: 1.0,
-      visible: true
+      line: { width: 4 },
+      whiskerwidth: 0.8
+      // WORKING HOVER TOOLTIPS
+      hovertemplate: '<b>Date: %{x}</b><br>Open: $%{open:,.2f}<br>High: $%{high:,.2f}<br>Low: $%{low:,.2f}<br>Close: $%{close:,.2f}<extra></extra>',
+      hoverinfo: 'all'
     }
   }, [optimizedCandles, renderingSettings])
 
@@ -644,13 +609,11 @@ const CandlestickChart: React.FC<Props> = ({
       // Optimized margins for professional appearance
       margin: { l: 10, r: 70, t: 90, b: 50 },
       height: height,
-      // DEFINITIVE INTERACTION CONFIG: Maximum performance + navigation
+      // SIMPLE WORKING DRAG AND ZOOM
       dragmode: 'pan',
-      hovermode: 'x unified',  // Better for multiple traces
+      hovermode: 'closest',
       scrollZoom: true,
-      doubleClick: 'reset+autosize',
       staticPlot: false,
-      displayModeBar: true,
       // Global hover styling for consistency
       hoverlabel: {
         bgcolor: 'rgba(13, 17, 23, 0.95)',
