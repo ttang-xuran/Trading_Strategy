@@ -62,6 +62,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       
       // Get historical data based on timeframe using the reliable livePriceService
       const days = getTimeframeDays(timeframe)
+      console.log(`Requesting ${days} days of data for ${timeframe} from ${source}`)
+      console.log(`Date range: ${new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()} to ${new Date().toISOString()}`)
+      
       const historicalData = await livePriceService.getHistoricalData(source, days)
       
       if (!historicalData || historicalData.length === 0) {
@@ -79,6 +82,14 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }))
       
       console.log(`Successfully loaded ${candles.length} REAL candles from ${source} livePriceService`)
+      
+      // Log date range of received data for debugging
+      if (candles.length > 0) {
+        console.log(`Data date range: ${candles[0].date} to ${candles[candles.length - 1].date}`)
+        console.log(`First candle:`, candles[0])
+        console.log(`Last candle:`, candles[candles.length - 1])
+      }
+      
       return candles.sort((a, b) => a.timestamp - b.timestamp)
       
     } catch (error) {
@@ -220,26 +231,30 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const chartWidth = rect.width - padding * 2
     const chartHeight = rect.height - padding * 2
 
-    // Calculate visible data range based on zoom and pan - fewer candles = thicker bars
-    // Adjust visible candles based on timeframe to ensure thick candlesticks
+    // SHOW ALL DATA - let the user pan/zoom to see different ranges
+    // Don't artificially limit visible candles - show the full timeframe requested
     let maxVisibleCandles: number
     switch (selectedTimeRange) {
       case '1M': 
-        maxVisibleCandles = 30
+        maxVisibleCandles = Math.min(candleData.length, 30)
         break
       case '3M': 
-        maxVisibleCandles = 25
+        maxVisibleCandles = Math.min(candleData.length, 90)
         break
       case '6M':
+        maxVisibleCandles = Math.min(candleData.length, 180) // Show full 6 months
+        break
       case 'YTD':
+        maxVisibleCandles = candleData.length // Show all YTD data
+        break
       case '1Y':
-        maxVisibleCandles = 15 // Much fewer for longer timeframes
+        maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        maxVisibleCandles = 10 // Very few for maximum data to ensure thick bars
+        maxVisibleCandles = candleData.length // Show all available data
         break
       default:
-        maxVisibleCandles = 20
+        maxVisibleCandles = Math.min(candleData.length, 180)
     }
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
@@ -301,9 +316,21 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       }
     }
 
-    // Calculate proper candlestick width for daily data - make them MUCH thicker and more visible
+    // Calculate adaptive candlestick width based on data density
     const candleSpacing = chartWidth / visibleData.length
-    const candleWidth = Math.max(24, Math.min(40, candleSpacing * 0.9)) // Much larger: minimum 24px width, maximum 40px
+    
+    // Adaptive width: fewer candles = thicker bars, more candles = thinner but still visible
+    let candleWidth: number
+    if (visibleData.length <= 50) {
+      // Few candles: make them thick (up to 40px)
+      candleWidth = Math.max(24, Math.min(40, candleSpacing * 0.9))
+    } else if (visibleData.length <= 100) {
+      // Medium number: moderate thickness (12-24px)
+      candleWidth = Math.max(12, Math.min(24, candleSpacing * 0.8))
+    } else {
+      // Many candles: thinner but visible (4-12px)
+      candleWidth = Math.max(4, Math.min(12, candleSpacing * 0.7))
+    }
     
     console.log(`Chart debug: visibleData.length=${visibleData.length}, chartWidth=${chartWidth}, candleSpacing=${candleSpacing}, candleWidth=${candleWidth}`)
     
