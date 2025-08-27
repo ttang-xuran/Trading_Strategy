@@ -763,13 +763,13 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '4px 8px' }}>
             <span style={{ color: '#8b949e' }}>Open:</span>
-            <span>${hoveredCandle.open.toLocaleString()}</span>
+            <span>${hoveredCandle.open < 1 ? hoveredCandle.open.toFixed(6) : hoveredCandle.open.toLocaleString()}</span>
             <span style={{ color: '#8b949e' }}>High:</span>
-            <span style={{ color: '#238636' }}>${hoveredCandle.high.toLocaleString()}</span>
+            <span style={{ color: '#238636' }}>${hoveredCandle.high < 1 ? hoveredCandle.high.toFixed(6) : hoveredCandle.high.toLocaleString()}</span>
             <span style={{ color: '#8b949e' }}>Low:</span>
-            <span style={{ color: '#da3633' }}>${hoveredCandle.low.toLocaleString()}</span>
+            <span style={{ color: '#da3633' }}>${hoveredCandle.low < 1 ? hoveredCandle.low.toFixed(6) : hoveredCandle.low.toLocaleString()}</span>
             <span style={{ color: '#8b949e' }}>Close:</span>
-            <span>${hoveredCandle.close.toLocaleString()}</span>
+            <span>${hoveredCandle.close < 1 ? hoveredCandle.close.toFixed(6) : hoveredCandle.close.toLocaleString()}</span>
           </div>
         </div>
       )}
