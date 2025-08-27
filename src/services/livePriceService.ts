@@ -131,9 +131,10 @@ class LivePriceService {
 
   /**
    * Build intelligent fallback chain based on API health and preference
+   * CoinGecko first as it has better CORS support for browsers
    */
   private buildFallbackChain(preferredSource?: string): string[] {
-    const sources = ['coingecko', 'binance', 'coinbase', 'bitstamp']
+    const sources = ['coingecko', 'coinbase', 'binance', 'bitstamp']
     
     // Sort by health and last success time
     const sortedSources = sources.sort((a, b) => {
@@ -598,9 +599,18 @@ class LivePriceService {
       console.log(`Fetching ${days} days of Coinbase data`)
     }
     
-    const response = await fetch(
-      `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startTime.toISOString()}&end=${endTime.toISOString()}&granularity=86400`
-    )
+    // Coinbase API often has CORS issues in browser, try direct first then fallback
+    const apiUrl = `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startTime.toISOString()}&end=${endTime.toISOString()}&granularity=86400`
+    
+    let response
+    try {
+      response = await fetch(apiUrl)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    } catch (error) {
+      console.warn('Coinbase API failed, likely CORS issue in browser:', error)
+      // Fallback to CoinGecko which has better CORS support
+      throw new Error('Coinbase API blocked by CORS - falling back to CoinGecko')
+    }
     
     if (!response.ok) throw new Error('Coinbase historical API failed')
     const data = await response.json()

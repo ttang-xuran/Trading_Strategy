@@ -99,9 +99,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     } catch (error) {
       console.error(`Failed to load REAL historical data from ${source}:`, error)
       
-      // IMPORTANT: DO NOT fall back to random data - throw the error
-      // This ensures we only show real market data, never simulated data
-      throw new Error(`Unable to load real historical data from ${source}: ${error.message}`)
+      // If all APIs fail (likely CORS in production), show helpful error message
+      // Still no random data - but provide clear guidance
+      throw new Error(`Unable to load real market data from ${source}. This may be due to CORS restrictions in the browser. Please try refreshing or use a different data source.`)
     } finally {
       setLoading(false)
     }
