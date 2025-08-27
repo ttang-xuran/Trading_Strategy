@@ -789,12 +789,34 @@ class LivePriceService {
         const [month, day, year] = dateStr.split('/')
         const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
         
+        // Parse OHLC values and validate they're valid numbers > 0
+        const parsedOpen = parseFloat(open)
+        const parsedHigh = parseFloat(high) 
+        const parsedLow = parseFloat(low)
+        const parsedClose = parseFloat(close)
+        
+        // Log and skip invalid data
+        if (!parsedOpen || parsedOpen <= 0 || !parsedHigh || parsedHigh <= 0 || 
+            !parsedLow || parsedLow <= 0 || !parsedClose || parsedClose <= 0 ||
+            isNaN(parsedOpen) || isNaN(parsedHigh) || isNaN(parsedLow) || isNaN(parsedClose)) {
+          console.warn(`Invalid CSV data for ${dateStr}: open=${open}, high=${high}, low=${low}, close=${close}`)
+          // Replace with minimum Bitcoin value to prevent $0 display
+          return {
+            date: date,
+            open: 0.0001,
+            high: 0.0001, 
+            low: 0.0001,
+            close: 0.0001,
+            timestamp: date.getTime()
+          }
+        }
+        
         return {
           date: date,
-          open: parseFloat(open),
-          high: parseFloat(high),
-          low: parseFloat(low),
-          close: parseFloat(close),
+          open: parsedOpen,
+          high: parsedHigh,
+          low: parsedLow,
+          close: parsedClose,
           timestamp: date.getTime()
         }
       })
