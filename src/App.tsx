@@ -3,6 +3,7 @@ import LiveHistoricalChart from './components/LiveHistoricalChart'
 import DataQualityMonitor from './components/DataQualityMonitor'
 import { livePriceService } from './services/livePriceService'
 import './index.css'
+// Force deployment with complete Bitcoin history support v2
 
 // Calculate real performance metrics from actual trades
 const calculatePerformanceData = (trades: any[]) => {
