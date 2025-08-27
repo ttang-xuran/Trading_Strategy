@@ -255,20 +255,29 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        // For 'All' timeframe: start with last 200 candles for optimal visibility
-        // User can zoom/pan to see full 16+ year history
-        maxVisibleCandles = Math.min(candleData.length, 200)
+        // For 'All' timeframe: show all available data with adaptive sizing
+        // With 5709 candles, each candle will be ~0.1px wide, but user can zoom/pan
+        maxVisibleCandles = candleData.length
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
     }
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
-    const startIndex = Math.max(0, Math.min(
-      candleData.length - visibleCandles,
-      Math.floor(panOffset)
-    ))
-    const endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+    
+    // For 'All' timeframe, start from beginning of data (2009) instead of end
+    let startIndex, endIndex
+    if (selectedTimeRange === 'All') {
+      startIndex = Math.max(0, Math.floor(panOffset))
+      endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+    } else {
+      // For other timeframes, show most recent data first
+      startIndex = Math.max(0, Math.min(
+        candleData.length - visibleCandles,
+        Math.floor(panOffset)
+      ))
+      endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+    }
     const visibleData = candleData.slice(startIndex, endIndex)
 
     if (visibleData.length === 0) return
