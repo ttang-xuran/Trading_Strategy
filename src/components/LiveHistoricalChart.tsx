@@ -255,9 +255,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        // For 'All' timeframe: start with last 500 candles for better visibility
-        // User can zoom/pan to see full range
-        maxVisibleCandles = Math.min(candleData.length, 500)
+        // For 'All' timeframe: start with last 200 candles for optimal visibility
+        // User can zoom/pan to see full 16+ year history
+        maxVisibleCandles = Math.min(candleData.length, 200)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -590,8 +590,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365)
         break
       case 'All':
-        // For 'All' timeframe: start with last 500 candles for better visibility
-        maxVisibleCandles = Math.min(candleData.length, 500)
+        // For 'All' timeframe: start with last 200 candles for optimal visibility
+        maxVisibleCandles = Math.min(candleData.length, 200)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
