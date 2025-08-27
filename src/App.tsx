@@ -727,23 +727,12 @@ function App() {
             <h3 style={{ margin: 0, color: '#f0f6fc' }}>
               Bitcoin (BTC/USD) - {selectedSource.toUpperCase()}
             </h3>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {['1M', '3M', '6M', 'YTD', '1Y', 'All'].map(period => (
-                <button
-                  key={period}
-                  style={{
-                    padding: '0.25rem 0.5rem',
-                    fontSize: '0.8rem',
-                    border: '1px solid #30363d',
-                    backgroundColor: period === '6M' ? '#2f81f7' : 'transparent',
-                    color: period === '6M' ? 'white' : '#7d8590',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {period}
-                </button>
-              ))}
+            <div style={{ 
+              fontSize: '0.8rem', 
+              color: '#7d8590',
+              fontStyle: 'italic'
+            }}>
+              Use timeframe buttons on the chart to change periods
             </div>
           </div>
           
