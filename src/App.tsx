@@ -452,9 +452,18 @@ function App() {
           confidence: priceData.confidence,
           isValid: priceData.isValid
         })
+        // Validate and cap unrealistic 24h changes at app level
+        let validatedChange24h = priceData.change24h || 0
+        const changePercent = (validatedChange24h / priceData.price) * 100
+        
+        if (Math.abs(changePercent) > 50) {
+          console.warn(`App received unrealistic 24h change: ${changePercent.toFixed(2)}%. Capping to ±5%.`)
+          validatedChange24h = (priceData.price * 0.05) * Math.sign(validatedChange24h)
+        }
+        
         setLivePrice({
           price: priceData.price,
-          change24h: priceData.change24h || 0,
+          change24h: validatedChange24h,
           timestamp: new Date().toISOString()
         })
       } catch (error) {
