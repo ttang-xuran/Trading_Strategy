@@ -43,7 +43,7 @@ const calculatePerformanceData = (trades: any[]) => {
   
   return {
     total_return_percent: ((finalEquity - initialCapital) / initialCapital) * 100,
-    total_trades: closingTrades.length,
+    total_trades: trades.length, // Count all trades, not just closing trades
     win_rate_percent: closingTrades.length > 0 ? (winningTrades / closingTrades.length) * 100 : 0,
     max_drawdown_percent: ((peakEquity - finalEquity) / peakEquity) * 100,
     profit_factor: grossLoss > 0 ? grossProfit / grossLoss : 0,
