@@ -713,7 +713,7 @@ function App() {
             color: livePrice.change24h >= 0 ? '#238636' : '#da3633',
             fontSize: '1.1rem'
           }}>
-            {livePrice.change24h >= 0 ? '+' : ''}{livePrice.change24h.toFixed(2)}%
+            {(livePrice.change24h / livePrice.price * 100) >= 0 ? '+' : ''}{(livePrice.change24h / livePrice.price * 100).toFixed(2)}%
           </div>
           <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: '#7d8590' }}>
             🔴 Live | Updated: {new Date(livePrice.timestamp).toLocaleTimeString()}
@@ -794,7 +794,7 @@ function App() {
                 <div>24h Change: <span style={{ 
                   color: livePrice.change24h >= 0 ? '#238636' : '#da3633' 
                 }}>
-                  {livePrice.change24h >= 0 ? '+' : ''}{livePrice.change24h.toFixed(2)}%
+                  {(livePrice.change24h / livePrice.price * 100) >= 0 ? '+' : ''}{(livePrice.change24h / livePrice.price * 100).toFixed(2)}%
                 </span></div>
                 <div>Updated: {new Date().toLocaleTimeString()}</div>
               </div>
