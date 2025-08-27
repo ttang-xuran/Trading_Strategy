@@ -53,7 +53,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         const yearStart = new Date(new Date().getFullYear(), 0, 1)
         return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
       case '1Y': return 365
-      case 'All': return 365 // Limited by free API
+      case 'All': return 2000 // Get maximum historical data available
       default: return 180
     }
   }
@@ -236,7 +236,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const chartHeight = rect.height - padding * 2
 
     // SHOW ALL DATA - let the user pan/zoom to see different ranges
-    // Don't artificially limit visible candles - show the full timeframe requested
+    // For 'All' timeframe, limit initial display to prevent overcrowding
     let maxVisibleCandles: number
     switch (selectedTimeRange) {
       case '1M': 
@@ -255,7 +255,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        maxVisibleCandles = candleData.length // Show all available data
+        // For 'All' timeframe: start with last 500 candles for better visibility
+        // User can zoom/pan to see full range
+        maxVisibleCandles = Math.min(candleData.length, 500)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -588,7 +590,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365)
         break
       case 'All':
-        maxVisibleCandles = candleData.length
+        // For 'All' timeframe: start with last 500 candles for better visibility
+        maxVisibleCandles = Math.min(candleData.length, 500)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
