@@ -520,6 +520,20 @@ class LivePriceService {
    */
   async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
     console.log(`getHistoricalData called: source=${source}, days=${days}`)
+    
+    // For "All" timeframe (9999+ days), use local complete Bitcoin history CSV
+    if (days >= 9999) {
+      console.log('Loading complete Bitcoin history from local CSV file (2009-2025)')
+      try {
+        const result = await this.fetchCompleteHistoryFromCSV()
+        console.log(`Loaded complete Bitcoin history: ${result.length} candles from 2009-2025`)
+        return result
+      } catch (error) {
+        console.error('Failed to load local CSV, falling back to API:', error)
+        // Fall through to API methods below
+      }
+    }
+    
     try {
       let result: any[]
       switch (source.toLowerCase()) {
@@ -749,6 +763,39 @@ class LivePriceService {
           low,
           close,
           timestamp: dayData.timestamps[0]
+        }
+      })
+      .sort((a, b) => a.timestamp - b.timestamp)
+  }
+
+  /**
+   * Load complete Bitcoin history from local CSV file (2009-2025)
+   */
+  private async fetchCompleteHistoryFromCSV(): Promise<any[]> {
+    const response = await fetch('/BTC_Price_full_history.csv')
+    if (!response.ok) {
+      throw new Error(`Failed to fetch CSV: ${response.status}`)
+    }
+    
+    const csvText = await response.text()
+    const lines = csvText.split('\n').slice(1) // Skip header
+    
+    return lines
+      .filter(line => line.trim() !== '') // Filter empty lines
+      .map(line => {
+        const [dateStr, open, high, low, close] = line.split(',')
+        
+        // Parse MM/DD/YYYY format to proper Date
+        const [month, day, year] = dateStr.split('/')
+        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+        
+        return {
+          date: date,
+          open: parseFloat(open),
+          high: parseFloat(high),
+          low: parseFloat(low),
+          close: parseFloat(close),
+          timestamp: date.getTime()
         }
       })
       .sort((a, b) => a.timestamp - b.timestamp)
