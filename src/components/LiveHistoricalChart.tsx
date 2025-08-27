@@ -255,9 +255,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        // For 'All' timeframe: show all available data with adaptive sizing
-        // With 5709 candles, each candle will be ~0.1px wide, but user can zoom/pan
-        maxVisibleCandles = candleData.length
+        // For 'All' timeframe: show manageable number of recent candles for usability
+        // User can pan/zoom to see historical data from 2009
+        maxVisibleCandles = Math.min(candleData.length, 500)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -265,13 +265,16 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
     
-    // For 'All' timeframe, show complete dataset from beginning (2009)
+    // Calculate data range to display
     let startIndex, endIndex
     if (selectedTimeRange === 'All') {
-      // Show all 5709 candles from 2009-2025, ignore zoom/pan for initial view
-      startIndex = 0
-      endIndex = candleData.length
-      console.log(`All timeframe: showing ${endIndex} candles from 2009 to 2025`)
+      // For 'All' timeframe: show recent 500 candles by default, allowing pan to see 2009 data
+      startIndex = Math.max(0, Math.min(
+        candleData.length - visibleCandles,
+        Math.floor(panOffset)
+      ))
+      endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+      console.log(`All timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'}`)
     } else {
       // For other timeframes, show most recent data first
       startIndex = Math.max(0, Math.min(
@@ -601,8 +604,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365)
         break
       case 'All':
-        // For 'All' timeframe: start with last 200 candles for optimal visibility
-        maxVisibleCandles = Math.min(candleData.length, 200)
+        // For 'All' timeframe: consistent with drawing logic - show 500 candles
+        maxVisibleCandles = Math.min(candleData.length, 500)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
