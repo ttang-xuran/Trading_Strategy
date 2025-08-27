@@ -255,7 +255,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        // For 'All' timeframe: show manageable number of recent candles for usability
+        // For 'All' timeframe: show manageable number of recent candles for usability  
         // User can pan/zoom to see historical data from 2009
         maxVisibleCandles = Math.min(candleData.length, 500)
         break
