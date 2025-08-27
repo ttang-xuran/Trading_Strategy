@@ -265,11 +265,13 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
     
-    // For 'All' timeframe, start from beginning of data (2009) instead of end
+    // For 'All' timeframe, show complete dataset from beginning (2009)
     let startIndex, endIndex
     if (selectedTimeRange === 'All') {
-      startIndex = Math.max(0, Math.floor(panOffset))
-      endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+      // Show all 5709 candles from 2009-2025, ignore zoom/pan for initial view
+      startIndex = 0
+      endIndex = candleData.length
+      console.log(`All timeframe: showing ${endIndex} candles from 2009 to 2025`)
     } else {
       // For other timeframes, show most recent data first
       startIndex = Math.max(0, Math.min(
