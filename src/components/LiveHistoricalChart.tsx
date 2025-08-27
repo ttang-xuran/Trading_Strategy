@@ -38,6 +38,10 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('6M')
   const [allHistoricalData, setAllHistoricalData] = useState<CandleData[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Hover state for OHLC tooltip
+  const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null)
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
 
   // Get number of days for each timeframe
   const getTimeframeDays = (timeframe: TimeRange): number => {
@@ -537,15 +541,98 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   }
 
   const handleMouseMove = (event: React.MouseEvent) => {
-    if (!isDragging) return
-    event.preventDefault()
-    const deltaX = event.clientX - lastMouseX
-    const panSensitivity = candleData.length / 1000
-    setPanOffset(prev => Math.max(0, Math.min(
-      candleData.length - Math.floor(candleData.length / zoomLevel),
-      prev - deltaX * panSensitivity
-    )))
-    setLastMouseX(event.clientX)
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const rect = canvas.getBoundingClientRect()
+    const mouseX = event.clientX - rect.left
+    const mouseY = event.clientY - rect.top
+    
+    // Update mouse position for tooltip
+    setMousePosition({ x: event.clientX, y: event.clientY })
+    
+    // Handle dragging
+    if (isDragging) {
+      event.preventDefault()
+      const deltaX = event.clientX - lastMouseX
+      // Improved pan sensitivity - more responsive dragging
+      const panSensitivity = Math.max(0.1, candleData.length / 500) // Increased sensitivity
+      setPanOffset(prev => Math.max(0, Math.min(
+        candleData.length - Math.floor(candleData.length / zoomLevel),
+        prev - deltaX * panSensitivity
+      )))
+      setLastMouseX(event.clientX)
+      return
+    }
+    
+    // Detect hover over candlesticks
+    const padding = 60
+    const chartWidth = rect.width - padding * 2
+    
+    // Calculate visible data range (same logic as in drawChart)
+    let maxVisibleCandles: number
+    switch (selectedTimeRange) {
+      case '1M': 
+        maxVisibleCandles = Math.min(candleData.length, 30)
+        break
+      case '3M': 
+        maxVisibleCandles = Math.min(candleData.length, 90)
+        break
+      case '6M':
+        maxVisibleCandles = Math.min(candleData.length, 180)
+        break
+      case 'YTD':
+        maxVisibleCandles = candleData.length
+        break
+      case '1Y':
+        maxVisibleCandles = Math.min(candleData.length, 365)
+        break
+      case 'All':
+        maxVisibleCandles = candleData.length
+        break
+      default:
+        maxVisibleCandles = Math.min(candleData.length, 180)
+    }
+    
+    const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
+    const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
+    const startIndex = Math.max(0, Math.min(
+      candleData.length - visibleCandles,
+      Math.floor(panOffset)
+    ))
+    const endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+    const visibleData = candleData.slice(startIndex, endIndex)
+    
+    if (visibleData.length === 0) {
+      setHoveredCandle(null)
+      return
+    }
+    
+    // Check if mouse is over a candlestick
+    const candleSpacing = chartWidth / visibleData.length
+    let candleWidth: number
+    if (visibleData.length <= 50) {
+      candleWidth = Math.max(24, Math.min(40, candleSpacing * 0.9))
+    } else if (visibleData.length <= 100) {
+      candleWidth = Math.max(12, Math.min(24, candleSpacing * 0.8))
+    } else {
+      candleWidth = Math.max(4, Math.min(12, candleSpacing * 0.7))
+    }
+    
+    // Find which candle is under the mouse
+    for (let i = 0; i < visibleData.length; i++) {
+      const candleX = padding + candleSpacing * i + candleSpacing / 2
+      const candleLeft = candleX - candleWidth / 2
+      const candleRight = candleX + candleWidth / 2
+      
+      if (mouseX >= candleLeft && mouseX <= candleRight && mouseY >= padding && mouseY <= rect.height - padding) {
+        setHoveredCandle(visibleData[i])
+        return
+      }
+    }
+    
+    // No candle found under mouse
+    setHoveredCandle(null)
   }
 
   const handleMouseUp = (event: React.MouseEvent) => {
@@ -555,6 +642,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
 
   const handleMouseLeave = () => {
     setIsDragging(false)
+    setHoveredCandle(null)
+    setMousePosition(null)
   }
 
   useEffect(() => {
@@ -637,6 +726,39 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
           }}
         />
       </div>
+
+      {/* OHLC Hover Tooltip */}
+      {hoveredCandle && mousePosition && (
+        <div style={{
+          position: 'fixed',
+          left: mousePosition.x + 15,
+          top: mousePosition.y - 10,
+          backgroundColor: 'rgba(13, 17, 23, 0.95)',
+          border: '1px solid #30363d',
+          borderRadius: '6px',
+          padding: '8px 12px',
+          fontSize: '12px',
+          color: '#f0f6fc',
+          fontFamily: 'monospace',
+          zIndex: 1000,
+          pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#58a6ff' }}>
+            {hoveredCandle.date}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '4px 8px' }}>
+            <span style={{ color: '#8b949e' }}>Open:</span>
+            <span>${hoveredCandle.open.toLocaleString()}</span>
+            <span style={{ color: '#8b949e' }}>High:</span>
+            <span style={{ color: '#238636' }}>${hoveredCandle.high.toLocaleString()}</span>
+            <span style={{ color: '#8b949e' }}>Low:</span>
+            <span style={{ color: '#da3633' }}>${hoveredCandle.low.toLocaleString()}</span>
+            <span style={{ color: '#8b949e' }}>Close:</span>
+            <span>${hoveredCandle.close.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
       
       {/* Controls Info */}
       <div style={{
