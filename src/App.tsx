@@ -734,6 +734,7 @@ function App() {
             }}>
               Use timeframe buttons on the chart to change periods
             </div>
+            {/* Fixed: Removed duplicate timeframe buttons - v2.0 */}
           </div>
           
           <div style={{ position: 'relative' }}>

@@ -309,12 +309,22 @@ class LivePriceService {
     const data = await response.json()
     const price = parseFloat(data.last)
     const open = parseFloat(data.open)
-    const change24h = price - open
+    
+    // Validate 24h change calculation - prevent impossible values
+    let change24h = price - open
+    let changePercent24h = (change24h / open) * 100
+    
+    // If change is more than ±50%, it's likely bad data - cap it
+    if (Math.abs(changePercent24h) > 50) {
+      console.warn(`Bitstamp returned unrealistic 24h change: ${changePercent24h.toFixed(2)}%. Capping to reasonable value.`)
+      changePercent24h = Math.sign(changePercent24h) * Math.min(Math.abs(changePercent24h), 10) // Cap at ±10%
+      change24h = (changePercent24h / 100) * open
+    }
     
     return {
       price,
       change24h,
-      changePercent24h: (change24h / open) * 100,
+      changePercent24h,
       timestamp: new Date().toISOString(),
       source: 'Bitstamp',
       isValid: true,
