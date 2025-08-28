@@ -269,7 +269,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     let startIndex, endIndex
     if (selectedTimeRange === 'All') {
       // For 'All' timeframe: show recent 500 candles by default, allowing pan to see 2009 data
-      startIndex = Math.max(0, Math.min(
+      // Start from end unless user has panned to earlier data
+      const defaultStartIndex = Math.max(0, candleData.length - visibleCandles)
+      startIndex = panOffset === 0 ? defaultStartIndex : Math.max(0, Math.min(
         candleData.length - visibleCandles,
         Math.floor(panOffset)
       ))
