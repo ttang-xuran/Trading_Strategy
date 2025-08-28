@@ -23,7 +23,9 @@ const calculatePerformanceData = (trades: any[]) => {
       peak_equity: 100000,
       final_equity: 100000,
       long_trades: 0,
-      short_trades: 0
+      short_trades: 0,
+      average_winner: 0,
+      average_loser: 0
     }
   }
   
@@ -41,6 +43,10 @@ const calculatePerformanceData = (trades: any[]) => {
   const longTrades = trades.filter(trade => trade.action.includes('LONG')).length
   const shortTrades = trades.filter(trade => trade.action.includes('SHORT')).length
   
+  // Calculate average winner/loser
+  const averageWinner = winningTrades > 0 ? grossProfit / winningTrades : 0
+  const averageLoser = losingTrades > 0 ? grossLoss / losingTrades : 0
+  
   return {
     total_return_percent: ((finalEquity - initialCapital) / initialCapital) * 100,
     total_trades: trades.length, // Count all trades, not just closing trades
@@ -56,7 +62,9 @@ const calculatePerformanceData = (trades: any[]) => {
     peak_equity: peakEquity,
     final_equity: finalEquity,
     long_trades: longTrades,
-    short_trades: shortTrades
+    short_trades: shortTrades,
+    average_winner: averageWinner,
+    average_loser: averageLoser
   }
 }
 
@@ -685,7 +693,7 @@ function App() {
               ${(performanceData.average_trade / 1000000).toFixed(1)}M
             </div>
             <div style={{ fontSize: '0.8rem', color: '#7d8590' }}>
-              Avg Winner: $4.0M | Avg Loser: $1.8M
+              Avg Winner: ${(performanceData.average_winner / 1000).toFixed(1)}K | Avg Loser: ${(performanceData.average_loser / 1000).toFixed(1)}K
             </div>
           </div>
         </div>
