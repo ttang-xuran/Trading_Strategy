@@ -154,6 +154,15 @@ function App() {
       // Process each day for strategy signals
       for (let i = lookbackPeriod; i < ohlcData.length; i++) {
         const currentBar = ohlcData[i]
+        
+        // Add data validation for extreme price ranges
+        if (!currentBar || !currentBar.open || !currentBar.high || 
+            !currentBar.low || !currentBar.close || 
+            currentBar.open <= 0 || currentBar.high <= 0 || 
+            currentBar.low <= 0 || currentBar.close <= 0) {
+          console.warn(`Invalid price data at index ${i}, skipping`)
+          continue
+        }
         const atr = calculateATR(ohlcData, atrPeriod, i)
         
         // Calculate breakout levels
@@ -170,13 +179,16 @@ function App() {
           if (currentBar.high > upperBoundary) {
             position = 'LONG'
             entryPrice = upperBoundary
-            positionSize = (equity * 0.95) / entryPrice
+            
+            // Fixed position sizing: Use dollar allocation method instead of BTC units
+            const dollarAllocation = equity * 0.95
+            positionSize = dollarAllocation // Store dollar allocation, not BTC units
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'ENTRY LONG',
               price: entryPrice,
-              size: positionSize,
+              size: (dollarAllocation / entryPrice).toFixed(8), // Show actual BTC units for display
               pnl: null,
               equity: equity,
               comment: 'Long Entry Signal'
@@ -185,13 +197,16 @@ function App() {
           else if (currentBar.low < lowerBoundary) {
             position = 'SHORT'
             entryPrice = lowerBoundary
-            positionSize = (equity * 0.95) / entryPrice
+            
+            // Fixed position sizing: Use dollar allocation method instead of BTC units
+            const dollarAllocation = equity * 0.95
+            positionSize = dollarAllocation // Store dollar allocation, not BTC units
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'ENTRY SHORT', 
               price: entryPrice,
-              size: positionSize,
+              size: (dollarAllocation / entryPrice).toFixed(8), // Show actual BTC units for display
               pnl: null,
               equity: equity,
               comment: 'Short Entry Signal'
@@ -224,11 +239,22 @@ function App() {
           }
           
           if (exitPrice !== null) {
+            // Fixed P&L calculation: Use percentage-based method for dollar allocation
             let pnl = 0
+            const dollarAllocation = positionSize // positionSize now stores dollar allocation
+            
             if (position === 'LONG') {
-              pnl = (exitPrice - entryPrice) * positionSize
+              // For LONG: P&L = allocation * (exitPrice / entryPrice - 1)
+              pnl = dollarAllocation * ((exitPrice / entryPrice) - 1)
             } else {
-              pnl = (entryPrice - exitPrice) * positionSize
+              // For SHORT: P&L = allocation * (1 - exitPrice / entryPrice)
+              pnl = dollarAllocation * (1 - (exitPrice / entryPrice))
+            }
+            
+            // Add mathematical safeguards
+            if (!isFinite(pnl) || isNaN(pnl)) {
+              console.warn(`Invalid P&L calculation: entry=${entryPrice}, exit=${exitPrice}, allocation=${dollarAllocation}`)
+              pnl = 0
             }
             
             equity += pnl
@@ -237,7 +263,7 @@ function App() {
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: `CLOSE ${position}`,
               price: exitPrice,
-              size: positionSize,
+              size: (dollarAllocation / entryPrice).toFixed(8), // Show actual BTC units for display
               pnl: pnl,
               equity: equity,
               comment: exitReason
