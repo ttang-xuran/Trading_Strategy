@@ -255,9 +255,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
       case 'All':
-        // For 'All' timeframe: show manageable number of recent candles for usability  
-        // User can pan/zoom to see historical data from 2009
-        maxVisibleCandles = Math.min(candleData.length, 500)
+        // For 'All' timeframe: show ALL historical data from 2009 to present
+        // Scale the chart to show the complete Bitcoin price history
+        maxVisibleCandles = candleData.length // Show ALL candles
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -268,15 +268,11 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     // Calculate data range to display
     let startIndex, endIndex
     if (selectedTimeRange === 'All') {
-      // For 'All' timeframe: show recent 500 candles by default, allowing pan to see 2009 data
-      // Start from end unless user has panned to earlier data
-      const defaultStartIndex = Math.max(0, candleData.length - visibleCandles)
-      startIndex = panOffset === 0 ? defaultStartIndex : Math.max(0, Math.min(
-        candleData.length - visibleCandles,
-        Math.floor(panOffset)
-      ))
+      // For 'All' timeframe: show complete Bitcoin history from 2009 to present
+      // Display all data with proper scaling to fit the chart
+      startIndex = Math.max(0, Math.floor(panOffset))
       endIndex = Math.min(candleData.length, startIndex + visibleCandles)
-      console.log(`All timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'}`)
+      console.log(`All timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'} (Total dataset: ${candleData.length} candles)`)
     } else {
       // For other timeframes, show most recent data first
       startIndex = Math.max(0, Math.min(

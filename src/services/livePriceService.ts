@@ -795,20 +795,12 @@ class LivePriceService {
         const parsedLow = parseFloat(low)
         const parsedClose = parseFloat(close)
         
-        // Log and skip invalid data
-        if (!parsedOpen || parsedOpen <= 0 || !parsedHigh || parsedHigh <= 0 || 
-            !parsedLow || parsedLow <= 0 || !parsedClose || parsedClose <= 0 ||
-            isNaN(parsedOpen) || isNaN(parsedHigh) || isNaN(parsedLow) || isNaN(parsedClose)) {
+        // Log and skip invalid data (but allow very small historical Bitcoin prices from 2009)
+        if (isNaN(parsedOpen) || isNaN(parsedHigh) || isNaN(parsedLow) || isNaN(parsedClose) ||
+            parsedOpen <= 0 || parsedHigh <= 0 || parsedLow <= 0 || parsedClose <= 0) {
           console.warn(`Invalid CSV data for ${dateStr}: open=${open}, high=${high}, low=${low}, close=${close}`)
-          // Replace with minimum Bitcoin value to prevent $0 display
-          return {
-            date: date,
-            open: 0.0001,
-            high: 0.0001, 
-            low: 0.0001,
-            close: 0.0001,
-            timestamp: date.getTime()
-          }
+          // Skip this row entirely for truly invalid data
+          return null
         }
         
         return {
@@ -820,6 +812,7 @@ class LivePriceService {
           timestamp: date.getTime()
         }
       })
+      .filter(item => item !== null) // Remove any null entries from invalid data
       .sort((a, b) => a.timestamp - b.timestamp)
   }
 
