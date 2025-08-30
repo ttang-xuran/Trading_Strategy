@@ -785,9 +785,9 @@ class LivePriceService {
       .map(line => {
         const [dateStr, open, high, low, close] = line.split(',')
         
-        // Parse MM/DD/YYYY format to proper Date
+        // Parse MM/DD/YYYY format to proper Date with explicit UTC to avoid timezone issues
         const [month, day, year] = dateStr.split('/')
-        const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+        const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0)) // Set to noon UTC
         
         // Parse OHLC values and validate they're valid numbers > 0
         const parsedOpen = parseFloat(open)

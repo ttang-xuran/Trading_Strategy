@@ -268,10 +268,17 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     // Calculate data range to display
     let startIndex, endIndex
     if (selectedTimeRange === 'All') {
-      // For 'All' timeframe: show complete Bitcoin history from 2009 to present
-      // Display all data with proper scaling to fit the chart
-      startIndex = Math.max(0, Math.floor(panOffset))
-      endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+      // For 'All' timeframe: show complete Bitcoin history but start from RECENT data
+      // Fix: Start from the end (recent data) unless user has specifically panned backward
+      if (panOffset === 0) {
+        // Default to showing the most recent data for 'All' timeframe
+        startIndex = Math.max(0, candleData.length - visibleCandles)
+        endIndex = candleData.length
+      } else {
+        // User has panned, show the requested range
+        startIndex = Math.max(0, Math.min(candleData.length - visibleCandles, Math.floor(panOffset)))
+        endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+      }
       console.log(`All timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'} (Total dataset: ${candleData.length} candles)`)
     } else {
       // For other timeframes, show most recent data first
@@ -544,8 +551,15 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   const handleWheel = (event: WheelEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1
-    setZoomLevel(prev => Math.max(0.5, Math.min(10, prev * zoomFactor)))
+    
+    // More controlled zoom with smaller increments to prevent chart from getting messed up
+    const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05 // Reduced from 0.9/1.1 to 0.95/1.05
+    const newZoomLevel = Math.max(0.5, Math.min(10, zoomLevel * zoomFactor))
+    
+    // Only update if the zoom level actually changes significantly (prevent micro-changes)
+    if (Math.abs(newZoomLevel - zoomLevel) > 0.01) {
+      setZoomLevel(newZoomLevel)
+    }
   }
 
   const handleMouseDown = (event: React.MouseEvent) => {
@@ -569,12 +583,13 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     if (isDragging) {
       event.preventDefault()
       const deltaX = event.clientX - lastMouseX
-      // Improved pan sensitivity - more responsive dragging
-      const panSensitivity = Math.max(0.1, candleData.length / 500) // Increased sensitivity
-      setPanOffset(prev => Math.max(0, Math.min(
-        candleData.length - Math.floor(candleData.length / zoomLevel),
-        prev - deltaX * panSensitivity
-      )))
+      // Fixed pan sensitivity - prevent chart from getting messed up
+      const panSensitivity = Math.min(1.0, Math.max(0.2, candleData.length / 1000)) // Controlled sensitivity
+      const newPanOffset = prev => {
+        const maxOffset = candleData.length - Math.floor(candleData.length / zoomLevel)
+        return Math.max(0, Math.min(maxOffset, prev - deltaX * panSensitivity))
+      }
+      setPanOffset(newPanOffset)
       setLastMouseX(event.clientX)
       return
     }
@@ -602,8 +617,8 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         maxVisibleCandles = Math.min(candleData.length, 365)
         break
       case 'All':
-        // For 'All' timeframe: consistent with drawing logic - show 500 candles
-        maxVisibleCandles = Math.min(candleData.length, 500)
+        // For 'All' timeframe: show all data with proper scaling
+        maxVisibleCandles = candleData.length // Show all available data
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -611,11 +626,24 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     
     const baseVisibleCandles = Math.min(maxVisibleCandles, candleData.length)
     const visibleCandles = Math.floor(baseVisibleCandles / zoomLevel)
-    const startIndex = Math.max(0, Math.min(
-      candleData.length - visibleCandles,
-      Math.floor(panOffset)
-    ))
-    const endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+    
+    // Use same logic as chart drawing for consistency
+    let startIndex, endIndex
+    if (selectedTimeRange === 'All') {
+      if (panOffset === 0) {
+        startIndex = Math.max(0, candleData.length - visibleCandles)
+        endIndex = candleData.length
+      } else {
+        startIndex = Math.max(0, Math.min(candleData.length - visibleCandles, Math.floor(panOffset)))
+        endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+      }
+    } else {
+      startIndex = Math.max(0, Math.min(
+        candleData.length - visibleCandles,
+        Math.floor(panOffset)
+      ))
+      endIndex = Math.min(candleData.length, startIndex + visibleCandles)
+    }
     const visibleData = candleData.slice(startIndex, endIndex)
     
     if (visibleData.length === 0) {

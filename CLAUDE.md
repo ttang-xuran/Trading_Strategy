@@ -4,50 +4,118 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Bitcoin trading strategy repository containing:
-- A Pine Script trading algorithm for TradingView (`BTC_Trading_Strategy.txt`)
-- Historical Bitcoin price data (`BTC_Price_full_history.csv`)
+This is a full-stack Bitcoin trading strategy application implementing the "Adaptive Volatility Breakout" strategy. The project includes:
+- **Frontend**: React/TypeScript web application for visualization
+- **Backend**: FastAPI Python service for data processing and backtesting
+- **Strategy**: Pine Script algorithm for TradingView
+- **Data**: Multiple cryptocurrency exchange data sources (Coinbase, Binance, Bitstamp, etc.)
+
+## Commands
+
+### Frontend Development
+```bash
+# Install dependencies
+npm install
+
+# Development server
+npm run dev
+
+# Build for production  
+npm run build
+
+# Preview production build
+npm run preview
+
+# Lint code
+npm run lint
+```
+
+### Backend Development
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Run FastAPI server locally
+uvicorn btc-strategy-web.backend.app.main:app --reload
+
+# Or use the main entry point
+python main.py
+```
+
+### Testing
+```bash
+# Frontend tests
+npm test
+
+# Backend API testing
+python btc-strategy-web/backend/test_api.py
+```
 
 ## Architecture
 
-### Strategy Implementation
-The core trading strategy is implemented in Pine Script v5 as "Adaptive Volatility Breakout [Reversal Enabled]":
+### Frontend (`src/`, `btc-strategy-web/frontend/`)
+- **React 18 + TypeScript** with Vite build system
+- **Charting**: Multiple chart libraries (Plotly.js, Recharts, lightweight-charts)
+- **State Management**: React hooks and context
+- **Styling**: CSS-in-JS with styled-components
+- **Data Fetching**: Axios with react-query for API calls
 
-- **Strategy Type**: Volatility breakout with reversal capability
-- **Timeframe**: Configurable date range (default: Jan 2020 - Dec 2025)
-- **Position Management**: Automatic reversal between long/short positions
-- **Risk Management**: ATR-based stop losses
+Key components:
+- `LiveHistoricalChart`: Real-time Bitcoin price charts with multiple timeframes
+- `DataSourceSelector`: Switch between exchange data sources
+- `PerformanceMetrics`: Trading strategy performance analytics
+- `TradesList`: Paginated trade history with CSV export
 
-### Key Components
-- **Breakout Detection**: Uses lookback period to identify highest/lowest levels
-- **Entry Signals**: Price breaks above/below calculated boundaries trigger trades
-- **Exit Logic**: ATR-based stop losses with configurable multipliers
-- **Visualization**: Plots boundaries and highlights active date range
+### Backend (`btc-strategy-web/backend/`, `main.py`)
+- **FastAPI** REST API with automatic OpenAPI documentation
+- **Data Services**: Multi-exchange price data aggregation
+- **Backtesting Engine**: Python implementation of Pine Script strategy
+- **Models**: Pydantic schemas for type safety
 
-### Data Structure
-- Historical price data in standard OHLC CSV format
-- Date range: January 2009 onwards
-- Fields: datetime, open, high, low, close
+Key services:
+- `DataService`: Handles multiple exchange APIs (Coinbase, Binance, Bitstamp)
+- `BacktestService`: Executes strategy backtesting with configurable parameters
+- API endpoints for chart data, trade signals, performance metrics, equity curves
 
-## File Structure
-```
-/
-├── BTC_Trading_Strategy.txt    # Pine Script strategy code
-└── BTC_Price_full_history.csv  # Historical Bitcoin OHLC data
-```
+### Strategy Logic (`BTC_Trading_Strategy.txt`, strategy implementation in frontend)
+- **Type**: Volatility breakout with reversal capability
+- **Entry**: Price breaks above/below calculated boundaries
+- **Exit**: ATR-based stop losses or reversal signals
+- **Position Sizing**: 95% equity allocation per trade
+- **Risk Management**: 2.5x ATR stop loss multiplier
 
-## Development Notes
+### Deployment
+- **Frontend**: Vercel deployment with automatic builds
+- **Backend**: Railway deployment with Docker support
+- **Environment**: Configurable for multiple hosting platforms
 
-### Strategy Parameters
-- `lookback_period`: Period for calculating breakout levels (default: 20)
-- `range_mult`: Range multiplier for boundaries (default: 0.5)
-- `stop_loss_mult`: ATR multiplier for stop losses (default: 2.5)
-- `atr_period`: ATR calculation period (default: 14)
+## Data Sources
 
-### Testing
-- No automated testing framework present
-- Strategy testing done through TradingView backtesting interface
-- Initial capital: $100,000
-- Commission: 0.1%
+The application supports multiple cryptocurrency exchanges:
+- **Coinbase Pro**: Primary data source (most reliable)
+- **Binance**: High liquidity alternative
+- **Bitstamp**: European exchange data
+- **Kraken**: Additional validation source
+- **CoinMetrics/CryptoCompare**: Historical data providers
 
-This is a Pine Script-based trading strategy project with no build system or dependencies beyond TradingView platform.
+Historical data files:
+- `BTC_Price_full_history.csv`: Complete Bitcoin history from 2009
+- `BTC_*_Historical.csv`: Exchange-specific datasets
+
+## Strategy Parameters
+
+Default optimized parameters:
+- `lookback_period`: 20 (breakout detection window)
+- `range_mult`: 0.5 (boundary calculation multiplier) 
+- `stop_loss_mult`: 2.5 (ATR-based stop loss)
+- `atr_period`: 14 (volatility calculation period)
+- `initial_capital`: $100,000
+
+## Performance Tracking
+
+The application calculates comprehensive metrics:
+- Total return percentage and net profit
+- Win rate and profit factor
+- Maximum drawdown analysis
+- Trade statistics (winners/losers, long/short)
+- Real-time equity curve visualization
