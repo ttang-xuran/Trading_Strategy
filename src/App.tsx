@@ -165,8 +165,8 @@ function App() {
         }
         const atr = calculateATR(ohlcData, atrPeriod, i)
         
-        // Calculate breakout levels
-        const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i)
+        // Calculate breakout levels - FIXED: Use previous lookback period like Pine Script [1]
+        const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod - 1), i - 1) // Previous bars only, excluding current
         const highestHigh = Math.max(...lookbackBars.map(bar => bar.high))
         const lowestLow = Math.min(...lookbackBars.map(bar => bar.low))
         const breakoutRange = highestHigh - lowestLow
@@ -174,47 +174,84 @@ function App() {
         const upperBoundary = currentBar.open + breakoutRange * rangeMultiplier
         const lowerBoundary = currentBar.open - breakoutRange * rangeMultiplier
         
-        // Entry signals
-        if (!position) {
-          if (currentBar.high > upperBoundary) {
-            position = 'LONG'
-            entryPrice = upperBoundary
-            
-            // Fixed position sizing: Use dollar allocation method instead of BTC units
-            const dollarAllocation = equity * 0.95
-            positionSize = dollarAllocation // Store dollar allocation, not BTC units
-            
-            trades.push({
-              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'ENTRY LONG',
-              price: entryPrice,
-              size: (dollarAllocation / entryPrice).toFixed(8), // Show actual BTC units for display
-              pnl: null,
-              equity: equity,
-              comment: 'Long Entry Signal'
-            })
-          }
-          else if (currentBar.low < lowerBoundary) {
-            position = 'SHORT'
-            entryPrice = lowerBoundary
-            
-            // Fixed position sizing: Use dollar allocation method instead of BTC units
-            const dollarAllocation = equity * 0.95
-            positionSize = dollarAllocation // Store dollar allocation, not BTC units
+        // FIXED: Pine Script reversal logic - check for signals regardless of current position
+        const goLong = currentBar.high > upperBoundary
+        const goShort = currentBar.low < lowerBoundary
+        
+        // REVERSAL LOGIC: If a long signal appears, close any short and immediately go long
+        if (goLong) {
+          // Close existing short position if any
+          if (position === 'SHORT') {
+            const exitPrice = upperBoundary
+            const dollarAllocation = positionSize
+            const pnl = dollarAllocation * (1 - (exitPrice / entryPrice))
+            equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'ENTRY SHORT', 
-              price: entryPrice,
-              size: (dollarAllocation / entryPrice).toFixed(8), // Show actual BTC units for display
-              pnl: null,
+              action: 'CLOSE SHORT',
+              price: exitPrice,
+              size: dollarAllocation / entryPrice,
+              pnl: pnl,
               equity: equity,
-              comment: 'Short Entry Signal'
+              comment: 'Reverse to Long'
             })
           }
+          
+          // Enter long position
+          position = 'LONG'
+          entryPrice = upperBoundary
+          const dollarAllocation = equity * 0.99 // FIXED: Match Pine Script 99% allocation
+          positionSize = dollarAllocation
+          
+          trades.push({
+            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'ENTRY LONG',
+            price: entryPrice,
+            size: (dollarAllocation / entryPrice).toFixed(8),
+            pnl: null,
+            equity: equity,
+            comment: 'Long Entry Signal'
+          })
         }
-        // Exit signals
-        else {
+        // REVERSAL LOGIC: If a short signal appears, close any long and immediately go short
+        else if (goShort) {
+          // Close existing long position if any
+          if (position === 'LONG') {
+            const exitPrice = lowerBoundary
+            const dollarAllocation = positionSize
+            const pnl = dollarAllocation * ((exitPrice / entryPrice) - 1)
+            equity += pnl
+            
+            trades.push({
+              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'CLOSE LONG',
+              price: exitPrice,
+              size: dollarAllocation / entryPrice,
+              pnl: pnl,
+              equity: equity,
+              comment: 'Reverse to Short'
+            })
+          }
+          
+          // Enter short position
+          position = 'SHORT'
+          entryPrice = lowerBoundary
+          const dollarAllocation = equity * 0.99 // FIXED: Match Pine Script 99% allocation
+          positionSize = dollarAllocation
+          
+          trades.push({
+            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'ENTRY SHORT',
+            price: entryPrice,
+            size: (dollarAllocation / entryPrice).toFixed(8),
+            pnl: null,
+            equity: equity,
+            comment: 'Short Entry Signal'
+          })
+        }
+        // STOP LOSS LOGIC: Only check stop loss if no reversal signal occurred
+        else if (position) {
           let exitPrice = null
           let exitReason = ''
           
@@ -222,36 +259,26 @@ function App() {
             const stopLoss = entryPrice - (atr * stopLossMultiplier)
             if (currentBar.low <= stopLoss) {
               exitPrice = stopLoss
-              exitReason = 'Stop Loss'
-            } else if (currentBar.low < lowerBoundary) {
-              exitPrice = lowerBoundary
-              exitReason = 'Reverse Signal'
+              exitReason = 'Stop Loss Long'
             }
           } else if (position === 'SHORT') {
             const stopLoss = entryPrice + (atr * stopLossMultiplier)
             if (currentBar.high >= stopLoss) {
               exitPrice = stopLoss
-              exitReason = 'Stop Loss'
-            } else if (currentBar.high > upperBoundary) {
-              exitPrice = upperBoundary
-              exitReason = 'Reverse Signal'
+              exitReason = 'Stop Loss Short'
             }
           }
           
           if (exitPrice !== null) {
-            // Fixed P&L calculation: Use percentage-based method for dollar allocation
+            const dollarAllocation = positionSize
             let pnl = 0
-            const dollarAllocation = positionSize // positionSize now stores dollar allocation
             
             if (position === 'LONG') {
-              // For LONG: P&L = allocation * (exitPrice / entryPrice - 1)
               pnl = dollarAllocation * ((exitPrice / entryPrice) - 1)
             } else {
-              // For SHORT: P&L = allocation * (1 - exitPrice / entryPrice)
               pnl = dollarAllocation * (1 - (exitPrice / entryPrice))
             }
             
-            // Add mathematical safeguards
             if (!isFinite(pnl) || isNaN(pnl)) {
               console.warn(`Invalid P&L calculation: entry=${entryPrice}, exit=${exitPrice}, allocation=${dollarAllocation}`)
               pnl = 0
@@ -263,7 +290,7 @@ function App() {
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: `CLOSE ${position}`,
               price: exitPrice,
-              size: (dollarAllocation / entryPrice).toFixed(8), // Show actual BTC units for display
+              size: dollarAllocation / entryPrice,
               pnl: pnl,
               equity: equity,
               comment: exitReason
@@ -317,27 +344,37 @@ function App() {
   const endIndex = startIndex + tradesPerPage
   const currentTrades = allTrades.slice(startIndex, endIndex)
 
-  // CSV download function
+  // CSV download function with error handling
   const downloadTradesCSV = () => {
-    const headers = ['Date', 'Action', 'Price', 'Size', 'P&L', 'Equity', 'Comment']
-    const csvContent = [
-      headers.join(','),
-      ...allTrades.map(trade => [
-        trade.date,
-        trade.action,
-        trade.price.toFixed(2),
-        trade.size.toFixed(4),
-        trade.pnl ? trade.pnl.toFixed(2) : '',
-        trade.equity.toFixed(2),
-        `"${trade.comment}"`
-      ].join(','))
-    ].join('\n')
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `btc_trades_${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
+    try {
+      if (!allTrades || allTrades.length === 0) {
+        alert('No trades to download. Please run a backtest first.')
+        return
+      }
+      
+      const headers = ['Date', 'Action', 'Price', 'Size', 'P&L', 'Equity', 'Comment']
+      const csvContent = [
+        headers.join(','),
+        ...allTrades.map(trade => [
+          trade.date || 'N/A',
+          trade.action || 'N/A',
+          (trade.price || 0).toFixed(2),
+          typeof trade.size === 'number' ? trade.size.toFixed(8) : parseFloat(trade.size || '0').toFixed(8),
+          trade.pnl ? trade.pnl.toFixed(2) : '',
+          (trade.equity || 0).toFixed(2),
+          `"${trade.comment || 'N/A'}"`
+        ].join(','))
+      ].join('\n')
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `btc_trades_${new Date().toISOString().split('T')[0]}.csv`
+      link.click()
+    } catch (error) {
+      console.error('Error downloading CSV:', error)
+      alert('Error downloading CSV file. Please try again.')
+    }
   }
 
   // Generate real equity curve data from trades
@@ -1049,22 +1086,22 @@ function App() {
                       borderRadius: '4px',
                       color: '#7d8590'
                     }}>
-                      <div>{trade.date}</div>
+                      <div>{trade.date || 'N/A'}</div>
                       <div style={{ 
-                        color: trade.action.includes('ENTRY') ? '#238636' : 
-                              trade.action.includes('CLOSE') ? '#da3633' : '#fd7e14'
+                        color: trade.action && trade.action.includes('ENTRY') ? '#238636' : 
+                              trade.action && trade.action.includes('CLOSE') ? '#da3633' : '#fd7e14'
                       }}>
-                        {trade.action}
+                        {trade.action || 'N/A'}
                       </div>
-                      <div>${trade.price.toLocaleString()}</div>
-                      <div>{trade.size.toFixed(4)}</div>
+                      <div>${trade.price ? trade.price.toLocaleString() : '0'}</div>
+                      <div>{typeof trade.size === 'number' ? trade.size.toFixed(8) : parseFloat(trade.size || '0').toFixed(8)}</div>
                       <div style={{ 
                         color: trade.pnl && trade.pnl > 0 ? '#238636' : trade.pnl && trade.pnl < 0 ? '#da3633' : '#7d8590'
                       }}>
                         {trade.pnl ? `${trade.pnl > 0 ? '+' : ''}$${trade.pnl.toLocaleString()}` : '-'}
                       </div>
-                      <div>${trade.equity.toLocaleString()}</div>
-                      <div>{trade.comment}</div>
+                      <div>${trade.equity ? trade.equity.toLocaleString() : '0'}</div>
+                      <div>{trade.comment || 'N/A'}</div>
                     </div>
                   ))}
                 </div>
