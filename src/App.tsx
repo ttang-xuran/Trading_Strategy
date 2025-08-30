@@ -184,7 +184,8 @@ function App() {
           if (position === 'SHORT') {
             const exitPrice = upperBoundary
             const dollarAllocation = positionSize
-            const pnl = dollarAllocation * (1 - (exitPrice / entryPrice))
+            // FIXED: Correct short P&L calculation = allocation * (entryPrice - exitPrice) / entryPrice
+            const pnl = dollarAllocation * ((entryPrice - exitPrice) / entryPrice)
             equity += pnl
             
             trades.push({
@@ -220,7 +221,8 @@ function App() {
           if (position === 'LONG') {
             const exitPrice = lowerBoundary
             const dollarAllocation = positionSize
-            const pnl = dollarAllocation * ((exitPrice / entryPrice) - 1)
+            // FIXED: Correct long P&L calculation = allocation * (exitPrice - entryPrice) / entryPrice
+            const pnl = dollarAllocation * ((exitPrice - entryPrice) / entryPrice)
             equity += pnl
             
             trades.push({
@@ -274,9 +276,11 @@ function App() {
             let pnl = 0
             
             if (position === 'LONG') {
-              pnl = dollarAllocation * ((exitPrice / entryPrice) - 1)
+              // FIXED: Long P&L = allocation * (exitPrice - entryPrice) / entryPrice
+              pnl = dollarAllocation * ((exitPrice - entryPrice) / entryPrice)
             } else {
-              pnl = dollarAllocation * (1 - (exitPrice / entryPrice))
+              // FIXED: Short P&L = allocation * (entryPrice - exitPrice) / entryPrice  
+              pnl = dollarAllocation * ((entryPrice - exitPrice) / entryPrice)
             }
             
             if (!isFinite(pnl) || isNaN(pnl)) {
