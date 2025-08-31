@@ -196,14 +196,14 @@ function App() {
           // Close short if exists (strategy.close("Short", comment="Reverse to Long"))
           if (position === 'SHORT') {
             const exitPrice = currentBar.open
-            const pnl = (equity * 0.99) * ((entryPrice - exitPrice) / entryPrice)
+            const pnl = positionSize * ((entryPrice - exitPrice) / entryPrice)
             equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE SHORT',
               price: exitPrice,
-              size: (equity * 0.99) / entryPrice,
+              size: positionSize / entryPrice,
               pnl: pnl,
               equity: equity,
               comment: 'Reverse to Long'
@@ -230,14 +230,14 @@ function App() {
           // Close long if exists (strategy.close("Long", comment="Reverse to Short"))
           if (position === 'LONG') {
             const exitPrice = currentBar.open
-            const pnl = (equity * 0.99) * ((exitPrice - entryPrice) / entryPrice)
+            const pnl = positionSize * ((exitPrice - entryPrice) / entryPrice)
             equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE LONG',
               price: exitPrice,
-              size: (equity * 0.99) / entryPrice,
+              size: positionSize / entryPrice,
               pnl: pnl,
               equity: equity,
               comment: 'Reverse to Short'
