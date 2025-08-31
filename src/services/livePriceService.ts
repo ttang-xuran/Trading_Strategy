@@ -523,10 +523,10 @@ class LivePriceService {
     
     // For "All" timeframe (9999+ days), use local complete Bitcoin history CSV
     if (days >= 9999) {
-      console.log('Loading complete Bitcoin history from local CSV file (2009-2025)')
+      console.log('Loading Bitcoin history from local CSV file (2014-2025)')
       try {
         const result = await this.fetchCompleteHistoryFromCSV()
-        console.log(`Loaded complete Bitcoin history: ${result.length} candles from 2009-2025`)
+        console.log(`Loaded Bitcoin history: ${result.length} candles from 2014-2025`)
         return result
       } catch (error) {
         console.error('Failed to load local CSV, falling back to API:', error)
@@ -813,6 +813,7 @@ class LivePriceService {
         }
       })
       .filter(item => item !== null) // Remove any null entries from invalid data
+      .filter(item => item.date >= new Date('2014-01-01')) // Start from 2014 to avoid extreme early prices
       .sort((a, b) => a.timestamp - b.timestamp)
   }
 
