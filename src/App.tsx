@@ -196,14 +196,15 @@ function App() {
           // Close short if exists (strategy.close("Short", comment="Reverse to Long"))
           if (position === 'SHORT') {
             const exitPrice = currentBar.open
-            const pnl = positionSize * ((entryPrice - exitPrice) / entryPrice)
+            // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
+            const pnl = positionSize * (exitPrice - entryPrice)
             equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE SHORT',
               price: exitPrice,
-              size: positionSize / entryPrice,
+              size: positionSize,
               pnl: pnl,
               equity: equity,
               comment: 'Reverse to Long'
@@ -213,14 +214,15 @@ function App() {
           // Enter long (strategy.entry("Long", strategy.long))
           position = 'LONG'
           entryPrice = currentBar.open
-          positionSize = equity * 0.99
+          // CORRECTED: Store position size as BTC shares, not dollar amount
+          positionSize = (equity * 0.99) / entryPrice
           positionChanged = true
           
           trades.push({
             date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             action: 'ENTRY LONG',
             price: entryPrice,
-            size: positionSize / entryPrice,
+            size: positionSize,
             pnl: null,
             equity: equity,
             comment: 'Long Entry Signal'
@@ -230,14 +232,15 @@ function App() {
           // Close long if exists (strategy.close("Long", comment="Reverse to Short"))
           if (position === 'LONG') {
             const exitPrice = currentBar.open
-            const pnl = positionSize * ((exitPrice - entryPrice) / entryPrice)
+            // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
+            const pnl = positionSize * (exitPrice - entryPrice)
             equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE LONG',
               price: exitPrice,
-              size: positionSize / entryPrice,
+              size: positionSize,
               pnl: pnl,
               equity: equity,
               comment: 'Reverse to Short'
@@ -247,14 +250,15 @@ function App() {
           // Enter short (strategy.entry("Short", strategy.short))
           position = 'SHORT'
           entryPrice = currentBar.open
-          positionSize = equity * 0.99
+          // CORRECTED: Store position size as BTC shares, not dollar amount
+          positionSize = (equity * 0.99) / entryPrice
           positionChanged = true
           
           trades.push({
             date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             action: 'ENTRY SHORT',
             price: entryPrice,
-            size: positionSize / entryPrice,
+            size: positionSize,
             pnl: null,
             equity: equity,
             comment: 'Short Entry Signal'
@@ -270,14 +274,15 @@ function App() {
             
             if (currentBar.low <= stopLossPrice) {
               const exitPrice = stopLossPrice
-              const pnl = positionSize * ((exitPrice - entryPrice) / entryPrice)
+              // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
+              const pnl = positionSize * (exitPrice - entryPrice)
               equity += pnl
               
               trades.push({
                 date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                 action: 'STOP LOSS LONG',
                 price: exitPrice,
-                size: positionSize / entryPrice,
+                size: positionSize,
                 pnl: pnl,
                 equity: equity,
                 comment: 'Stop Loss Hit'
@@ -295,14 +300,15 @@ function App() {
             
             if (currentBar.high >= stopLossPrice) {
               const exitPrice = stopLossPrice
-              const pnl = positionSize * ((entryPrice - exitPrice) / entryPrice)
+              // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
+              const pnl = positionSize * (entryPrice - exitPrice)
               equity += pnl
               
               trades.push({
                 date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                 action: 'STOP LOSS SHORT',
                 price: exitPrice,
-                size: positionSize / entryPrice,
+                size: positionSize,
                 pnl: pnl,
                 equity: equity,
                 comment: 'Stop Loss Hit'
