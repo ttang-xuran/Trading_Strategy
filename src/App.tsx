@@ -132,9 +132,7 @@ function App() {
       let positionSize = 0
       const trades = []
       
-      // CRITICAL: Track pending signals for next-bar execution (TradingView logic)
-      let pendingLongSignal = false
-      let pendingShortSignal = false
+      // No pending signals - Pine Script uses immediate execution
       
       // Calculate ATR
       const calculateATR = (data: any[], period: number, index: number) => {
@@ -155,10 +153,9 @@ function App() {
         return sum / period
       }
       
-      // Process each day - FIXED: Next-bar execution like TradingView
-      for (let i = lookbackPeriod; i < ohlcData.length - 1; i++) {
+      // Process each day - CORRECTED: Same-bar immediate execution like Pine Script
+      for (let i = lookbackPeriod; i < ohlcData.length; i++) {
         const currentBar = ohlcData[i]
-        const nextBar = ohlcData[i + 1] // Next bar for execution
         
         // Add data validation for extreme price ranges
         if (!currentBar || !currentBar.open || !currentBar.high || 
@@ -170,30 +167,54 @@ function App() {
         }
         
         const atr = calculateATR(ohlcData, atrPeriod, i)
+        if (atr === 1000) continue // Skip if ATR not available
         
-        // STEP 1: Execute pending signals from previous bar at current bar's OPEN price
-        if (pendingLongSignal) {
-          // Close short position if any (at current bar's open)
+        // EXACT Pine Script Calculations
+        // highest_high = ta.highest(high, lookback_period)[1] - previous bars only
+        const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i)
+        if (lookbackBars.length === 0) continue
+        
+        const highestHigh = Math.max(...lookbackBars.map(bar => bar.high))
+        const lowestLow = Math.min(...lookbackBars.map(bar => bar.low))
+        const breakoutRange = highestHigh - lowestLow
+        
+        // upper_boundary = open + breakout_range * range_mult
+        // lower_boundary = open - breakout_range * range_mult  
+        const upperBoundary = currentBar.open + (breakoutRange * rangeMultiplier)
+        const lowerBoundary = currentBar.open - (breakoutRange * rangeMultiplier)
+        
+        // EXACT Pine Script Entry Logic
+        // go_long = high > upper_boundary
+        // go_short = low < lower_boundary
+        const goLong = currentBar.high > upperBoundary
+        const goShort = currentBar.low < lowerBoundary
+        
+        // EXACT Pine Script Execution (Reversal Enabled) - IMMEDIATE same-bar execution
+        let positionChanged = false
+        
+        if (goLong) {
+          // Close short if exists (strategy.close("Short", comment="Reverse to Long"))
           if (position === 'SHORT') {
             const exitPrice = currentBar.open
-            const pnl = positionSize * ((entryPrice - exitPrice) / entryPrice)
+            const pnl = (equity * 0.99) * ((entryPrice - exitPrice) / entryPrice)
             equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE SHORT',
               price: exitPrice,
-              size: positionSize / entryPrice,
+              size: (equity * 0.99) / entryPrice,
               pnl: pnl,
               equity: equity,
               comment: 'Reverse to Long'
             })
           }
           
-          // Enter long position at current bar's open
+          // Enter long (strategy.entry("Long", strategy.long))
           position = 'LONG'
           entryPrice = currentBar.open
-          positionSize = equity * 0.99  // 99% of equity like Pine Script
+          positionSize = equity * 0.99
+          positionChanged = true
           
           trades.push({
             date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -204,32 +225,30 @@ function App() {
             equity: equity,
             comment: 'Long Entry Signal'
           })
-          
-          pendingLongSignal = false
         }
-        
-        if (pendingShortSignal) {
-          // Close long position if any (at current bar's open)
+        else if (goShort) {
+          // Close long if exists (strategy.close("Long", comment="Reverse to Short"))
           if (position === 'LONG') {
             const exitPrice = currentBar.open
-            const pnl = positionSize * ((exitPrice - entryPrice) / entryPrice)
+            const pnl = (equity * 0.99) * ((exitPrice - entryPrice) / entryPrice)
             equity += pnl
             
             trades.push({
               date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE LONG',
               price: exitPrice,
-              size: positionSize / entryPrice,
+              size: (equity * 0.99) / entryPrice,
               pnl: pnl,
               equity: equity,
               comment: 'Reverse to Short'
             })
           }
           
-          // Enter short position at current bar's open
+          // Enter short (strategy.entry("Short", strategy.short))
           position = 'SHORT'
           entryPrice = currentBar.open
-          positionSize = equity * 0.99  // 99% of equity like Pine Script
+          positionSize = equity * 0.99
+          positionChanged = true
           
           trades.push({
             date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -240,70 +259,60 @@ function App() {
             equity: equity,
             comment: 'Short Entry Signal'
           })
+        }
+        
+        // EXIT LOGIC: Only check stops if no new position was opened (Pine Script priority)
+        if (!positionChanged && position !== null) {
           
-          pendingShortSignal = false
-        }
-        
-        // STEP 2: Check stop losses on current bar
-        if (position === 'LONG') {
-          const stopLoss = entryPrice - (atr * stopLossMultiplier)
-          if (currentBar.low <= stopLoss) {
-            const exitPrice = stopLoss
-            const pnl = positionSize * ((exitPrice - entryPrice) / entryPrice)
-            equity += pnl
+          if (position === 'LONG') {
+            // long_stop_price = strategy.position_avg_price - atr * stop_loss_mult
+            const stopLossPrice = entryPrice - (atr * stopLossMultiplier)
             
-            trades.push({
-              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'STOP LOSS LONG',
-              price: exitPrice,
-              size: positionSize / entryPrice,
-              pnl: pnl,
-              equity: equity,
-              comment: 'Stop Loss'
-            })
-            
-            position = null
+            if (currentBar.low <= stopLossPrice) {
+              const exitPrice = stopLossPrice
+              const pnl = positionSize * ((exitPrice - entryPrice) / entryPrice)
+              equity += pnl
+              
+              trades.push({
+                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                action: 'STOP LOSS LONG',
+                price: exitPrice,
+                size: positionSize / entryPrice,
+                pnl: pnl,
+                equity: equity,
+                comment: 'Stop Loss Hit'
+              })
+              
+              position = null
+              entryPrice = 0
+              positionSize = 0
+            }
           }
-        } else if (position === 'SHORT') {
-          const stopLoss = entryPrice + (atr * stopLossMultiplier)
-          if (currentBar.high >= stopLoss) {
-            const exitPrice = stopLoss
-            const pnl = positionSize * ((entryPrice - exitPrice) / entryPrice)
-            equity += pnl
+          
+          if (position === 'SHORT') {
+            // short_stop_price = strategy.position_avg_price + atr * stop_loss_mult
+            const stopLossPrice = entryPrice + (atr * stopLossMultiplier)
             
-            trades.push({
-              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'STOP LOSS SHORT',
-              price: exitPrice,
-              size: positionSize / entryPrice,
-              pnl: pnl,
-              equity: equity,
-              comment: 'Stop Loss'
-            })
-            
-            position = null
+            if (currentBar.high >= stopLossPrice) {
+              const exitPrice = stopLossPrice
+              const pnl = positionSize * ((entryPrice - exitPrice) / entryPrice)
+              equity += pnl
+              
+              trades.push({
+                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                action: 'STOP LOSS SHORT',
+                price: exitPrice,
+                size: positionSize / entryPrice,
+                pnl: pnl,
+                equity: equity,
+                comment: 'Stop Loss Hit'
+              })
+              
+              position = null
+              entryPrice = 0
+              positionSize = 0
+            }
           }
-        }
-        
-        // STEP 3: Detect new signals for NEXT bar execution (TradingView logic)
-        const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i) // Previous bars only
-        const highestHigh = Math.max(...lookbackBars.map(bar => bar.high))
-        const lowestLow = Math.min(...lookbackBars.map(bar => bar.low))
-        const breakoutRange = highestHigh - lowestLow
-        
-        const upperBoundary = currentBar.open + breakoutRange * rangeMultiplier
-        const lowerBoundary = currentBar.open - breakoutRange * rangeMultiplier
-        
-        // Detect signals for next bar execution
-        const goLong = currentBar.high > upperBoundary
-        const goShort = currentBar.low < lowerBoundary
-        
-        if (goLong) {
-          pendingLongSignal = true
-          pendingShortSignal = false
-        } else if (goShort) {
-          pendingShortSignal = true
-          pendingLongSignal = false
         }
       }
       
