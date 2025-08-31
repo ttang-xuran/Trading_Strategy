@@ -197,7 +197,8 @@ function App() {
           if (position === 'SHORT') {
             const exitPrice = currentBar.open
             // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
-            const pnl = positionSize * (exitPrice - entryPrice)
+            // For SHORT: profit when price falls, so pnl = shares * (entryPrice - exitPrice)
+            const pnl = positionSize * (entryPrice - exitPrice)
             equity += pnl
             
             trades.push({
