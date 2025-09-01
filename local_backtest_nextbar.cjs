@@ -61,8 +61,9 @@ let entryPrice = 0;
 let positionSize = 0;
 const trades = [];
 
-// Pending signals for next-bar execution (Pine Script behavior)
+// Pine Script state tracking
 let pendingSignal = null; // 'LONG', 'SHORT', or null
+let pendingStopLoss = null; // { type: 'LONG'|'SHORT', price: number } for next-bar stop execution
 
 // Calculate ATR function
 const calculateATR = (data, period, index) => {
@@ -83,7 +84,7 @@ const calculateATR = (data, period, index) => {
   return sum / period;
 };
 
-// Process each day - CORRECTED: Next-bar execution like Pine Script
+// Process each day - COMPLETE Pine Script implementation
 for (let i = lookbackPeriod; i < ohlcData.length; i++) {
   const currentBar = ohlcData[i];
   const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null;
@@ -111,9 +112,16 @@ for (let i = lookbackPeriod; i < ohlcData.length; i++) {
   const upperBoundary = currentBar.open + (breakoutRange * rangeMultiplier);
   const lowerBoundary = currentBar.open - (breakoutRange * rangeMultiplier);
   
+  // Pine Script date range filter (default: 2020-2025)
+  const startDate = new Date('2020-01-01');
+  const endDate = new Date('2025-12-31');
+  const inDateRange = currentBar.date >= startDate && currentBar.date <= endDate;
+  
   // EXACT Pine Script Entry Logic
-  const goLong = currentBar.high > upperBoundary;
-  const goShort = currentBar.low < lowerBoundary;
+  // go_long = high > upper_boundary and in_date_range
+  // go_short = low < lower_boundary and in_date_range
+  const goLong = currentBar.high > upperBoundary && inDateRange;
+  const goShort = currentBar.low < lowerBoundary && inDateRange;
   
   // STEP 1: Execute any pending signals from previous bar (Next-bar execution)
   let positionChanged = false;
@@ -212,55 +220,76 @@ for (let i = lookbackPeriod; i < ohlcData.length; i++) {
     }
   }
   
-  // STEP 3: EXIT LOGIC - Check stops on current bar (immediate execution)
-  if (!positionChanged && position !== null && !pendingSignal) {
+  // STEP 3: EXECUTE PENDING STOP LOSS (Next-bar execution like Pine Script)
+  if (pendingStopLoss && nextBar && !positionChanged) {
+    const stopType = pendingStopLoss.type;
+    const stopPrice = pendingStopLoss.price;
     
-    if (position === 'LONG') {
-      const stopLossPrice = entryPrice - (atr * stopLossMultiplier);
-      
-      if (currentBar.low <= stopLossPrice) {
-        const exitPrice = stopLossPrice;
+    if (stopType === 'LONG' && position === 'LONG') {
+      // Check if next bar's low hits the stop
+      if (nextBar.low <= stopPrice) {
+        const exitPrice = stopPrice;
         const pnl = positionSize * (exitPrice - entryPrice);
         equity += pnl;
         
         trades.push({
-          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           action: 'STOP LOSS LONG',
           price: exitPrice,
           size: positionSize,
           pnl: pnl,
           equity: equity,
-          comment: 'Stop Loss Hit'
+          comment: 'Stop Loss Hit (Next Bar)'
         });
         
         position = null;
         entryPrice = 0;
         positionSize = 0;
+        positionChanged = true;
       }
     }
-    
-    if (position === 'SHORT') {
-      const stopLossPrice = entryPrice + (atr * stopLossMultiplier);
-      
-      if (currentBar.high >= stopLossPrice) {
-        const exitPrice = stopLossPrice;
-        // CORRECTED: For SHORT positions, profit when price falls
+    else if (stopType === 'SHORT' && position === 'SHORT') {
+      // Check if next bar's high hits the stop
+      if (nextBar.high >= stopPrice) {
+        const exitPrice = stopPrice;
         const pnl = positionSize * (entryPrice - exitPrice);
         equity += pnl;
         
         trades.push({
-          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           action: 'STOP LOSS SHORT',
           price: exitPrice,
           size: positionSize,
           pnl: pnl,
           equity: equity,
-          comment: 'Stop Loss Hit'
+          comment: 'Stop Loss Hit (Next Bar)'
         });
         
         position = null;
         entryPrice = 0;
         positionSize = 0;
+        positionChanged = true;
+      }
+    }
+    pendingStopLoss = null;
+  }
+  
+  // STEP 4: UPDATE STOP LOSS ORDERS (Every bar, like Pine Script)
+  if (position !== null && !positionChanged) {
+    if (position === 'LONG') {
+      // long_stop_price = strategy.position_avg_price - atr * stop_loss_mult
+      const stopLossPrice = entryPrice - (atr * stopLossMultiplier);
+      // Check if current bar hits stop (for next bar execution)
+      if (currentBar.low <= stopLossPrice) {
+        pendingStopLoss = { type: 'LONG', price: stopLossPrice };
+      }
+    }
+    else if (position === 'SHORT') {
+      // short_stop_price = strategy.position_avg_price + atr * stop_loss_mult  
+      const stopLossPrice = entryPrice + (atr * stopLossMultiplier);
+      // Check if current bar hits stop (for next bar execution)
+      if (currentBar.high >= stopLossPrice) {
+        pendingStopLoss = { type: 'SHORT', price: stopLossPrice };
       }
     }
   }
