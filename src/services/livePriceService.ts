@@ -521,7 +521,7 @@ class LivePriceService {
   async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
     console.log(`getHistoricalData called: source=${source}, days=${days}`)
     
-    // Always use the selected data source - no CSV bypass
+    // Always use the selected data source
     // Each exchange will provide whatever historical data it has available
     
     try {
@@ -758,54 +758,6 @@ class LivePriceService {
       .sort((a, b) => a.timestamp - b.timestamp)
   }
 
-  /**
-   * Load complete Bitcoin history from local CSV file (2009-2025)
-   */
-  private async fetchCompleteHistoryFromCSV(): Promise<any[]> {
-    const response = await fetch('/BTC_Price_full_history.csv')
-    if (!response.ok) {
-      throw new Error(`Failed to fetch CSV: ${response.status}`)
-    }
-    
-    const csvText = await response.text()
-    const lines = csvText.split('\n').slice(1) // Skip header
-    
-    return lines
-      .filter(line => line.trim() !== '') // Filter empty lines
-      .map(line => {
-        const [dateStr, open, high, low, close] = line.split(',')
-        
-        // Parse MM/DD/YYYY format to proper Date with explicit UTC to avoid timezone issues
-        const [month, day, year] = dateStr.split('/')
-        const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0)) // Set to noon UTC
-        
-        // Parse OHLC values and validate they're valid numbers > 0
-        const parsedOpen = parseFloat(open)
-        const parsedHigh = parseFloat(high) 
-        const parsedLow = parseFloat(low)
-        const parsedClose = parseFloat(close)
-        
-        // Log and skip invalid data (but allow very small historical Bitcoin prices from 2009)
-        if (isNaN(parsedOpen) || isNaN(parsedHigh) || isNaN(parsedLow) || isNaN(parsedClose) ||
-            parsedOpen <= 0 || parsedHigh <= 0 || parsedLow <= 0 || parsedClose <= 0) {
-          console.warn(`Invalid CSV data for ${dateStr}: open=${open}, high=${high}, low=${low}, close=${close}`)
-          // Skip this row entirely for truly invalid data
-          return null
-        }
-        
-        return {
-          date: date,
-          open: parsedOpen,
-          high: parsedHigh,
-          low: parsedLow,
-          close: parsedClose,
-          timestamp: date.getTime()
-        }
-      })
-      .filter(item => item !== null) // Remove any null entries from invalid data
-      .filter(item => item.date >= new Date('2014-01-01')) // Start from 2014 to avoid extreme early prices
-      .sort((a, b) => a.timestamp - b.timestamp)
-  }
 
   /**
    * Calculate unrealized P&L for open position

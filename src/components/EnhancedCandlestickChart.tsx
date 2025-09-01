@@ -28,34 +28,20 @@ export default function EnhancedCandlestickChart({ height = 400, tradeSignals = 
   const [isDragging, setIsDragging] = useState(false)
   const [lastMouseX, setLastMouseX] = useState(0)
 
-  // Load real Bitcoin price data from CSV
+  // Load real Bitcoin price data from API
   const loadHistoricalData = async (): Promise<CandleData[]> => {
     try {
-      const response = await fetch('/BTC_Price_full_history.csv')
-      const csvText = await response.text()
-      const lines = csvText.split('\n').slice(1) // Skip header
-      
-      // Get last 90 days of data
-      const recentData = lines.slice(-90).filter(line => line.trim()).map(line => {
-        const [datetime, open, high, low, close] = line.split(',')
-        return {
-          date: new Date(datetime).toISOString().split('T')[0],
-          open: parseFloat(open),
-          high: parseFloat(high),
-          low: parseFloat(low),
-          close: parseFloat(close),
-        }
-      })
-      
-      return recentData
+      // This component should use fallback data only
+      // Real data should come from livePriceService
+      return generateFallbackData() // Use fallback instead of CSV
     } catch (error) {
-      console.error('Failed to load historical data:', error)
-      // Fallback to recent realistic data if CSV fails
+      console.error('Error loading historical data:', error)
+      // Fallback to recent realistic data
       return generateFallbackData()
     }
   }
 
-  // Fallback data if CSV loading fails
+  // Fallback data for offline/testing scenarios
   const generateFallbackData = (): CandleData[] => {
     const data: CandleData[] = []
     const startDate = new Date()

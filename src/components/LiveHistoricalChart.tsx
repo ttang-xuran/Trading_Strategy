@@ -53,7 +53,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         const yearStart = new Date(new Date().getFullYear(), 0, 1)
         return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
       case '1Y': return 365
-      case 'All': return 9999 // Trigger full CSV load with complete Bitcoin history
+      case 'All': return 9999 // Request maximum available historical data from exchange
       default: return 180
     }
   }
