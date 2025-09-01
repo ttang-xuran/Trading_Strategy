@@ -132,7 +132,8 @@ function App() {
       let positionSize = 0
       const trades = []
       
-      // No pending signals - Pine Script uses immediate execution
+      // Pending signals for next-bar execution (Pine Script behavior)
+      let pendingSignal = null // 'LONG', 'SHORT', or null
       
       // Calculate ATR
       const calculateATR = (data: any[], period: number, index: number) => {
@@ -153,9 +154,10 @@ function App() {
         return sum / period
       }
       
-      // Process each day - CORRECTED: Same-bar immediate execution like Pine Script
+      // Process each day - CORRECTED: Next-bar execution like Pine Script
       for (let i = lookbackPeriod; i < ohlcData.length; i++) {
         const currentBar = ohlcData[i]
+        const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null
         
         // Add data validation for extreme price ranges
         if (!currentBar || !currentBar.open || !currentBar.high || 
@@ -189,85 +191,99 @@ function App() {
         const goLong = currentBar.high > upperBoundary
         const goShort = currentBar.low < lowerBoundary
         
-        // EXACT Pine Script Execution (Reversal Enabled) - IMMEDIATE same-bar execution
+        // STEP 1: Execute any pending signals from previous bar (Next-bar execution)
         let positionChanged = false
         
-        if (goLong) {
+        if (pendingSignal === 'LONG' && nextBar) {
           // Close short if exists (strategy.close("Short", comment="Reverse to Long"))
           if (position === 'SHORT') {
-            const exitPrice = currentBar.open
+            const exitPrice = nextBar.open
             // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
             // For SHORT: profit when price falls, so pnl = shares * (entryPrice - exitPrice)
             const pnl = positionSize * (entryPrice - exitPrice)
             equity += pnl
             
             trades.push({
-              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE SHORT',
               price: exitPrice,
               size: positionSize,
               pnl: pnl,
               equity: equity,
-              comment: 'Reverse to Long'
+              comment: 'Reverse to Long (Next Bar)'
             })
           }
           
           // Enter long (strategy.entry("Long", strategy.long))
-          position = 'LONG'
-          entryPrice = currentBar.open
-          // CORRECTED: Store position size as BTC shares, not dollar amount
-          positionSize = (equity * 0.99) / entryPrice
-          positionChanged = true
-          
-          trades.push({
-            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            action: 'ENTRY LONG',
-            price: entryPrice,
-            size: positionSize,
-            pnl: null,
-            equity: equity,
-            comment: 'Long Entry Signal'
-          })
+          if (nextBar) {
+            position = 'LONG'
+            entryPrice = nextBar.open
+            // CORRECTED: Store position size as BTC shares, not dollar amount
+            positionSize = (equity * 0.99) / entryPrice
+            positionChanged = true
+            
+            trades.push({
+              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'ENTRY LONG',
+              price: entryPrice,
+              size: positionSize,
+              pnl: null,
+              equity: equity,
+              comment: 'Long Entry (Next Bar)'
+            })
+          }
+          pendingSignal = null
         }
-        else if (goShort) {
+        else if (pendingSignal === 'SHORT' && nextBar) {
           // Close long if exists (strategy.close("Long", comment="Reverse to Short"))
           if (position === 'LONG') {
-            const exitPrice = currentBar.open
+            const exitPrice = nextBar.open
             // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
             const pnl = positionSize * (exitPrice - entryPrice)
             equity += pnl
             
             trades.push({
-              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
               action: 'CLOSE LONG',
               price: exitPrice,
               size: positionSize,
               pnl: pnl,
               equity: equity,
-              comment: 'Reverse to Short'
+              comment: 'Reverse to Short (Next Bar)'
             })
           }
           
           // Enter short (strategy.entry("Short", strategy.short))
-          position = 'SHORT'
-          entryPrice = currentBar.open
-          // CORRECTED: Store position size as BTC shares, not dollar amount
-          positionSize = (equity * 0.99) / entryPrice
-          positionChanged = true
-          
-          trades.push({
-            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            action: 'ENTRY SHORT',
-            price: entryPrice,
-            size: positionSize,
-            pnl: null,
-            equity: equity,
-            comment: 'Short Entry Signal'
-          })
+          if (nextBar) {
+            position = 'SHORT'
+            entryPrice = nextBar.open
+            // CORRECTED: Store position size as BTC shares, not dollar amount
+            positionSize = (equity * 0.99) / entryPrice
+            positionChanged = true
+            
+            trades.push({
+              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'ENTRY SHORT',
+              price: entryPrice,
+              size: positionSize,
+              pnl: null,
+              equity: equity,
+              comment: 'Short Entry (Next Bar)'
+            })
+          }
+          pendingSignal = null
         }
         
-        // EXIT LOGIC: Only check stops if no new position was opened (Pine Script priority)
-        if (!positionChanged && position !== null) {
+        // STEP 2: Check for new signals on current bar (for next bar execution)
+        if (goLong && !positionChanged) {
+          pendingSignal = 'LONG'
+        }
+        else if (goShort && !positionChanged) {
+          pendingSignal = 'SHORT'
+        }
+        
+        // STEP 3: EXIT LOGIC - Check stops on current bar (immediate execution)
+        if (!positionChanged && position !== null && !pendingSignal) {
           
           if (position === 'LONG') {
             // long_stop_price = strategy.position_avg_price - atr * stop_loss_mult
