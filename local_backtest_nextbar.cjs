@@ -63,7 +63,6 @@ const trades = [];
 
 // Pine Script state tracking
 let pendingSignal = null; // 'LONG', 'SHORT', or null
-let pendingStopLoss = null; // { type: 'LONG'|'SHORT', price: number } for next-bar stop execution
 
 // Calculate ATR function
 const calculateATR = (data, period, index) => {
@@ -220,76 +219,56 @@ for (let i = lookbackPeriod; i < ohlcData.length; i++) {
     }
   }
   
-  // STEP 3: EXECUTE PENDING STOP LOSS (Next-bar execution like Pine Script)
-  if (pendingStopLoss && nextBar && !positionChanged) {
-    const stopType = pendingStopLoss.type;
-    const stopPrice = pendingStopLoss.price;
-    
-    if (stopType === 'LONG' && position === 'LONG') {
-      // Check if next bar's low hits the stop
-      if (nextBar.low <= stopPrice) {
-        const exitPrice = stopPrice;
+  // STEP 3: CHECK STOP LOSSES (Same-bar execution when level is hit)
+  if (position !== null && !positionChanged) {
+    if (position === 'LONG') {
+      // long_stop_price = strategy.position_avg_price - atr * stop_loss_mult
+      const stopLossPrice = entryPrice - (atr * stopLossMultiplier);
+      // Execute immediately if current bar hits stop level
+      if (currentBar.low <= stopLossPrice) {
+        const exitPrice = stopLossPrice;
         const pnl = positionSize * (exitPrice - entryPrice);
         equity += pnl;
         
         trades.push({
-          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           action: 'STOP LOSS LONG',
           price: exitPrice,
           size: positionSize,
           pnl: pnl,
           equity: equity,
-          comment: 'Stop Loss Hit (Next Bar)'
+          comment: 'Stop Loss Hit'
         });
         
         position = null;
         entryPrice = 0;
         positionSize = 0;
         positionChanged = true;
-      }
-    }
-    else if (stopType === 'SHORT' && position === 'SHORT') {
-      // Check if next bar's high hits the stop
-      if (nextBar.high >= stopPrice) {
-        const exitPrice = stopPrice;
-        const pnl = positionSize * (entryPrice - exitPrice);
-        equity += pnl;
-        
-        trades.push({
-          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          action: 'STOP LOSS SHORT',
-          price: exitPrice,
-          size: positionSize,
-          pnl: pnl,
-          equity: equity,
-          comment: 'Stop Loss Hit (Next Bar)'
-        });
-        
-        position = null;
-        entryPrice = 0;
-        positionSize = 0;
-        positionChanged = true;
-      }
-    }
-    pendingStopLoss = null;
-  }
-  
-  // STEP 4: UPDATE STOP LOSS ORDERS (Every bar, like Pine Script)
-  if (position !== null && !positionChanged) {
-    if (position === 'LONG') {
-      // long_stop_price = strategy.position_avg_price - atr * stop_loss_mult
-      const stopLossPrice = entryPrice - (atr * stopLossMultiplier);
-      // Check if current bar hits stop (for next bar execution)
-      if (currentBar.low <= stopLossPrice) {
-        pendingStopLoss = { type: 'LONG', price: stopLossPrice };
       }
     }
     else if (position === 'SHORT') {
       // short_stop_price = strategy.position_avg_price + atr * stop_loss_mult  
       const stopLossPrice = entryPrice + (atr * stopLossMultiplier);
-      // Check if current bar hits stop (for next bar execution)
+      // Execute immediately if current bar hits stop level
       if (currentBar.high >= stopLossPrice) {
-        pendingStopLoss = { type: 'SHORT', price: stopLossPrice };
+        const exitPrice = stopLossPrice;
+        const pnl = positionSize * (entryPrice - exitPrice);
+        equity += pnl;
+        
+        trades.push({
+          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: 'STOP LOSS SHORT',
+          price: exitPrice,
+          size: positionSize,
+          pnl: pnl,
+          equity: equity,
+          comment: 'Stop Loss Hit'
+        });
+        
+        position = null;
+        entryPrice = 0;
+        positionSize = 0;
+        positionChanged = true;
       }
     }
   }
