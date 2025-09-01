@@ -227,14 +227,16 @@ for (let i = lookbackPeriod + 1; i < ohlcData.length; i++) { // +1 to allow for 
     }
   }
   
-  // STEP 3: CHECK STOP LOSSES (Same-bar execution when level is hit)
+  // STEP 3: PINE SCRIPT STOP LOSSES (Recalculated every bar, executed when hit)
+  // This matches: long_stop_price = strategy.position_avg_price - atr * stop_loss_mult (every bar)
+  //               if strategy.position_size > 0: strategy.exit("SL Long", stop=long_stop_price)
   if (position !== null && !positionChanged) {
     if (position === 'LONG') {
-      // long_stop_price = strategy.position_avg_price - atr * stop_loss_mult
-      const stopLossPrice = entryPrice - (atr * stopLossMultiplier);
-      // Execute immediately if current bar hits stop level
-      if (currentBar.low <= stopLossPrice) {
-        const exitPrice = stopLossPrice;
+      // Recalculate stop price every bar with current ATR (Pine Script behavior)
+      const longStopPrice = entryPrice - (atr * stopLossMultiplier);
+      // Execute immediately if current bar hits the dynamically updated stop level
+      if (currentBar.low <= longStopPrice) {
+        const exitPrice = longStopPrice;
         const pnl = positionSize * (exitPrice - entryPrice);
         equity += pnl;
         
@@ -245,7 +247,7 @@ for (let i = lookbackPeriod + 1; i < ohlcData.length; i++) { // +1 to allow for 
           size: positionSize,
           pnl: pnl,
           equity: equity,
-          comment: 'Stop Loss Hit'
+          comment: `Stop Loss Hit (ATR: ${atr.toFixed(2)})`
         });
         
         position = null;
@@ -255,11 +257,11 @@ for (let i = lookbackPeriod + 1; i < ohlcData.length; i++) { // +1 to allow for 
       }
     }
     else if (position === 'SHORT') {
-      // short_stop_price = strategy.position_avg_price + atr * stop_loss_mult  
-      const stopLossPrice = entryPrice + (atr * stopLossMultiplier);
-      // Execute immediately if current bar hits stop level
-      if (currentBar.high >= stopLossPrice) {
-        const exitPrice = stopLossPrice;
+      // Recalculate stop price every bar with current ATR (Pine Script behavior)
+      const shortStopPrice = entryPrice + (atr * stopLossMultiplier);
+      // Execute immediately if current bar hits the dynamically updated stop level  
+      if (currentBar.high >= shortStopPrice) {
+        const exitPrice = shortStopPrice;
         const pnl = positionSize * (entryPrice - exitPrice);
         equity += pnl;
         
@@ -270,7 +272,7 @@ for (let i = lookbackPeriod + 1; i < ohlcData.length; i++) { // +1 to allow for 
           size: positionSize,
           pnl: pnl,
           equity: equity,
-          comment: 'Stop Loss Hit'
+          comment: `Stop Loss Hit (ATR: ${atr.toFixed(2)})`
         });
         
         position = null;
