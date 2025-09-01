@@ -521,18 +521,8 @@ class LivePriceService {
   async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
     console.log(`getHistoricalData called: source=${source}, days=${days}`)
     
-    // For "All" timeframe (9999+ days), use local complete Bitcoin history CSV
-    if (days >= 9999) {
-      console.log('Loading Bitcoin history from local CSV file (2014-2025)')
-      try {
-        const result = await this.fetchCompleteHistoryFromCSV()
-        console.log(`Loaded Bitcoin history: ${result.length} candles from 2014-2025`)
-        return result
-      } catch (error) {
-        console.error('Failed to load local CSV, falling back to API:', error)
-        // Fall through to API methods below
-      }
-    }
+    // Always use the selected data source - no CSV bypass
+    // Each exchange will provide whatever historical data it has available
     
     try {
       let result: any[]

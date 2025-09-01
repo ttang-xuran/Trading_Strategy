@@ -185,16 +185,11 @@ function App() {
         const upperBoundary = currentBar.open + (breakoutRange * rangeMultiplier)
         const lowerBoundary = currentBar.open - (breakoutRange * rangeMultiplier)
         
-        // Pine Script date range filter (default: 2020-2025)
-        const startDate = new Date('2020-01-01')
-        const endDate = new Date('2025-12-31')
-        const inDateRange = currentBar.date >= startDate && currentBar.date <= endDate
-        
-        // EXACT Pine Script Entry Logic
-        // go_long = high > upper_boundary and in_date_range
-        // go_short = low < lower_boundary and in_date_range
-        const goLong = currentBar.high > upperBoundary && inDateRange
-        const goShort = currentBar.low < lowerBoundary && inDateRange
+        // EXACT Pine Script Entry Logic (no date filter - use full dataset)
+        // go_long = high > upper_boundary
+        // go_short = low < lower_boundary
+        const goLong = currentBar.high > upperBoundary
+        const goShort = currentBar.low < lowerBoundary
         
         // STEP 1: Execute any pending signals from previous bar (Next-bar execution)
         let positionChanged = false

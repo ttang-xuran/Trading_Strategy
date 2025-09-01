@@ -83,8 +83,23 @@ const calculateATR = (data, period, index) => {
   return sum / period;
 };
 
+// Pre-calculate highest/lowest series for [1] reference
+const highestSeries = [];
+const lowestSeries = [];
+
+for (let i = 0; i < ohlcData.length; i++) {
+  if (i < lookbackPeriod) {
+    highestSeries[i] = 0;
+    lowestSeries[i] = 0;
+  } else {
+    const lookbackBars = ohlcData.slice(i - lookbackPeriod, i);
+    highestSeries[i] = Math.max(...lookbackBars.map(bar => bar.high));
+    lowestSeries[i] = Math.min(...lookbackBars.map(bar => bar.low));
+  }
+}
+
 // Process each day - COMPLETE Pine Script implementation
-for (let i = lookbackPeriod; i < ohlcData.length; i++) {
+for (let i = lookbackPeriod + 1; i < ohlcData.length; i++) { // +1 to allow for [1] reference
   const currentBar = ohlcData[i];
   const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null;
   
@@ -100,27 +115,20 @@ for (let i = lookbackPeriod; i < ohlcData.length; i++) {
   const atr = calculateATR(ohlcData, atrPeriod, i);
   if (atr === 1000) continue; // Skip if ATR not available
   
-  // EXACT Pine Script Calculations
-  const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i);
-  if (lookbackBars.length === 0) continue;
-  
-  const highestHigh = Math.max(...lookbackBars.map(bar => bar.high));
-  const lowestLow = Math.min(...lookbackBars.map(bar => bar.low));
+  // EXACT Pine Script Calculations - FINAL INTERPRETATION
+  // ta.highest(high, lookbook_period)[1] means use the series value from 1 bar ago
+  const highestHigh = highestSeries[i - 1]; // [1] reference - previous bar's value
+  const lowestLow = lowestSeries[i - 1]; // [1] reference - previous bar's value
   const breakoutRange = highestHigh - lowestLow;
   
   const upperBoundary = currentBar.open + (breakoutRange * rangeMultiplier);
   const lowerBoundary = currentBar.open - (breakoutRange * rangeMultiplier);
   
-  // Pine Script date range filter (default: 2020-2025)
-  const startDate = new Date('2020-01-01');
-  const endDate = new Date('2025-12-31');
-  const inDateRange = currentBar.date >= startDate && currentBar.date <= endDate;
-  
-  // EXACT Pine Script Entry Logic
-  // go_long = high > upper_boundary and in_date_range
-  // go_short = low < lower_boundary and in_date_range
-  const goLong = currentBar.high > upperBoundary && inDateRange;
-  const goShort = currentBar.low < lowerBoundary && inDateRange;
+  // EXACT Pine Script Entry Logic (no date filter - use full dataset)
+  // go_long = high > upper_boundary
+  // go_short = low < lower_boundary
+  const goLong = currentBar.high > upperBoundary;
+  const goShort = currentBar.low < lowerBoundary;
   
   // STEP 1: Execute any pending signals from previous bar (Next-bar execution)
   let positionChanged = false;
