@@ -198,11 +198,18 @@ for (let i = lookbackPeriod; i < ohlcData.length; i++) {
   }
   
   // STEP 2: Check for new signals on current bar (for next bar execution)
+  // CRITICAL: Only trigger signals if opposite to current position (Pine Script behavior)
   if (goLong && !positionChanged) {
-    pendingSignal = 'LONG';
+    // Only set LONG signal if we're NOT already LONG
+    if (position !== 'LONG') {
+      pendingSignal = 'LONG';
+    }
   }
   else if (goShort && !positionChanged) {
-    pendingSignal = 'SHORT';
+    // Only set SHORT signal if we're NOT already SHORT
+    if (position !== 'SHORT') {
+      pendingSignal = 'SHORT';
+    }
   }
   
   // STEP 3: EXIT LOGIC - Check stops on current bar (immediate execution)
