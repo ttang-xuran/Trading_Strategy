@@ -24,7 +24,7 @@ interface Props {
   onTimeframeChange?: (timeframe: string) => void
 }
 
-type TimeRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'All'
+type TimeRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | '10Y'
 
 export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source, onTimeframeChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -53,7 +53,10 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         const yearStart = new Date(new Date().getFullYear(), 0, 1)
         return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
       case '1Y': return 365
-      case 'All': return 9999 // Request maximum available historical data from exchange
+      case '2Y': return 730
+      case '3Y': return 1095
+      case '5Y': return 1825
+      case '10Y': return 3650
       default: return 180
     }
   }
@@ -236,7 +239,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const chartHeight = rect.height - padding * 2
 
     // SHOW ALL DATA - let the user pan/zoom to see different ranges
-    // For 'All' timeframe, limit initial display to prevent overcrowding
+    // Calculate max visible candles based on timeframe
     let maxVisibleCandles: number
     switch (selectedTimeRange) {
       case '1M': 
@@ -254,10 +257,17 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       case '1Y':
         maxVisibleCandles = Math.min(candleData.length, 365) // Show full year
         break
-      case 'All':
-        // For 'All' timeframe: show ALL historical data from 2009 to present
-        // Scale the chart to show the complete Bitcoin price history
-        maxVisibleCandles = candleData.length // Show ALL candles
+      case '2Y':
+        maxVisibleCandles = Math.min(candleData.length, 730) // Show full 2 years
+        break
+      case '3Y':
+        maxVisibleCandles = Math.min(candleData.length, 1095) // Show full 3 years
+        break
+      case '5Y':
+        maxVisibleCandles = Math.min(candleData.length, 1825) // Show full 5 years
+        break
+      case '10Y':
+        maxVisibleCandles = Math.min(candleData.length, 3650) // Show full 10 years
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -267,11 +277,11 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     
     // Calculate data range to display
     let startIndex, endIndex
-    if (selectedTimeRange === 'All') {
-      // For 'All' timeframe: show complete Bitcoin history but start from RECENT data
+    if (['2Y', '3Y', '5Y', '10Y'].includes(selectedTimeRange)) {
+      // For long timeframes: show complete historical data but start from RECENT data
       // Fix: Start from the end (recent data) unless user has specifically panned backward
       if (panOffset === 0) {
-        // Default to showing the most recent data for 'All' timeframe
+        // Default to showing the most recent data for long timeframes
         startIndex = Math.max(0, candleData.length - visibleCandles)
         endIndex = candleData.length
       } else {
@@ -279,7 +289,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         startIndex = Math.max(0, Math.min(candleData.length - visibleCandles, Math.floor(panOffset)))
         endIndex = Math.min(candleData.length, startIndex + visibleCandles)
       }
-      console.log(`All timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'} (Total dataset: ${candleData.length} candles)`)
+      console.log(`${selectedTimeRange} timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'} (Total dataset: ${candleData.length} candles)`)
     } else {
       // For other timeframes, show most recent data first
       startIndex = Math.max(0, Math.min(
@@ -621,9 +631,17 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       case '1Y':
         maxVisibleCandles = Math.min(candleData.length, 365)
         break
-      case 'All':
-        // For 'All' timeframe: show all data with proper scaling
-        maxVisibleCandles = candleData.length // Show all available data
+      case '2Y':
+        maxVisibleCandles = Math.min(candleData.length, 730)
+        break
+      case '3Y':
+        maxVisibleCandles = Math.min(candleData.length, 1095)
+        break
+      case '5Y':
+        maxVisibleCandles = Math.min(candleData.length, 1825)
+        break
+      case '10Y':
+        maxVisibleCandles = Math.min(candleData.length, 3650)
         break
       default:
         maxVisibleCandles = Math.min(candleData.length, 180)
@@ -634,7 +652,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     
     // Use same logic as chart drawing for consistency
     let startIndex, endIndex
-    if (selectedTimeRange === 'All') {
+    if (['2Y', '3Y', '5Y', '10Y'].includes(selectedTimeRange)) {
       if (panOffset === 0) {
         startIndex = Math.max(0, candleData.length - visibleCandles)
         endIndex = candleData.length
@@ -737,7 +755,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         gap: '4px',
         zIndex: 10
       }}>
-        {(['1M', '3M', '6M', 'YTD', '1Y', 'All'] as TimeRange[]).map(timeframe => (
+        {(['1M', '3M', '6M', 'YTD', '1Y', '2Y', '3Y', '5Y', '10Y'] as TimeRange[]).map(timeframe => (
           <button
             key={timeframe}
             onClick={() => handleTimeframeChange(timeframe)}
