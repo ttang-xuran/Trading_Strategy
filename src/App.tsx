@@ -35,24 +35,43 @@ const calculatePerformanceData = (trades: any[]) => {
   const grossProfit = closingTrades.filter(trade => trade.pnl > 0).reduce((sum, trade) => sum + trade.pnl, 0)
   const grossLoss = Math.abs(closingTrades.filter(trade => trade.pnl < 0).reduce((sum, trade) => sum + trade.pnl, 0))
   const netProfit = grossProfit - grossLoss
-  const finalEquity = trades.length > 0 ? trades[0].equity : initialCapital // First trade is most recent
+  
+  // FIXED: Get final equity from last trade in chronological order (trades are reverse chronological)
+  const finalEquity = trades.length > 0 ? trades[trades.length - 1].equity : initialCapital
   const peakEquity = trades.reduce((max, trade) => Math.max(max, trade.equity), initialCapital)
+  
+  // FIXED: Calculate proper maximum drawdown (peak-to-trough)
+  let maxDrawdown = 0
+  let runningPeak = initialCapital
+  
+  // Process trades in chronological order for drawdown calculation
+  const chronologicalTrades = [...trades].reverse()
+  chronologicalTrades.forEach(trade => {
+    runningPeak = Math.max(runningPeak, trade.equity)
+    const drawdown = (runningPeak - trade.equity) / runningPeak
+    maxDrawdown = Math.max(maxDrawdown, drawdown)
+  })
   
   const winningTrades = closingTrades.filter(trade => trade.pnl > 0).length
   const losingTrades = closingTrades.filter(trade => trade.pnl < 0).length
-  const longTrades = trades.filter(trade => trade.action.includes('LONG')).length
-  const shortTrades = trades.filter(trade => trade.action.includes('SHORT')).length
+  
+  // FIXED: Only count entry trades, not all trades with LONG/SHORT in name
+  const longTrades = trades.filter(trade => trade.action === 'ENTRY LONG').length
+  const shortTrades = trades.filter(trade => trade.action === 'ENTRY SHORT').length
   
   // Calculate average winner/loser
   const averageWinner = winningTrades > 0 ? grossProfit / winningTrades : 0
   const averageLoser = losingTrades > 0 ? grossLoss / losingTrades : 0
   
+  // FIXED: Handle profit factor when no losses (infinity case)
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? Number.POSITIVE_INFINITY : 0)
+  
   return {
     total_return_percent: ((finalEquity - initialCapital) / initialCapital) * 100,
     total_trades: trades.length, // Count all trades, not just closing trades
     win_rate_percent: closingTrades.length > 0 ? (winningTrades / closingTrades.length) * 100 : 0,
-    max_drawdown_percent: ((peakEquity - finalEquity) / peakEquity) * 100,
-    profit_factor: grossLoss > 0 ? grossProfit / grossLoss : 0,
+    max_drawdown_percent: maxDrawdown * 100, // FIXED: Proper drawdown calculation
+    profit_factor: profitFactor, // FIXED: Handle no-loss scenarios
     average_trade: closingTrades.length > 0 ? netProfit / closingTrades.length : 0,
     net_profit: netProfit,
     gross_profit: grossProfit,
@@ -61,8 +80,8 @@ const calculatePerformanceData = (trades: any[]) => {
     losing_trades: losingTrades,
     peak_equity: peakEquity,
     final_equity: finalEquity,
-    long_trades: longTrades,
-    short_trades: shortTrades,
+    long_trades: longTrades, // FIXED: Only entry trades
+    short_trades: shortTrades, // FIXED: Only entry trades
     average_winner: averageWinner,
     average_loser: averageLoser
   }
@@ -436,21 +455,32 @@ function App() {
     const equityPoints = []
     const startingEquity = 100000
     
-    // Start with initial capital  
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - 90) // 90 days ago
-    equityPoints.push({
-      date: startDate,
-      equity: startingEquity
-    })
+    // FIXED: Get the actual date range from trades instead of arbitrary 90 days ago
+    const chronologicalTrades = [...allTrades].reverse()
+    
+    // Start with initial capital at the beginning of the trading period
+    if (chronologicalTrades.length > 0) {
+      const firstTradeDate = new Date(chronologicalTrades[0].date)
+      // Start equity curve a few days before first trade to show initial capital
+      const startDate = new Date(firstTradeDate)
+      startDate.setDate(startDate.getDate() - 1)
+      
+      equityPoints.push({
+        date: startDate,
+        equity: startingEquity
+      })
+    }
     
     // Add equity points from actual trades (in chronological order)
-    const chronologicalTrades = [...allTrades].reverse()
     chronologicalTrades.forEach(trade => {
-      equityPoints.push({
-        date: new Date(trade.date),
-        equity: trade.equity
-      })
+      const tradeDate = new Date(trade.date)
+      // Ensure valid date
+      if (!isNaN(tradeDate.getTime())) {
+        equityPoints.push({
+          date: tradeDate,
+          equity: trade.equity
+        })
+      }
     })
     
     // Sort by date to ensure proper chronological order
