@@ -36,8 +36,8 @@ const calculatePerformanceData = (trades: any[]) => {
   const grossLoss = Math.abs(closingTrades.filter(trade => trade.pnl < 0).reduce((sum, trade) => sum + trade.pnl, 0))
   const netProfit = grossProfit - grossLoss
   
-  // FIXED: Get final equity from last trade in chronological order (trades are reverse chronological)
-  const finalEquity = trades.length > 0 ? trades[trades.length - 1].equity : initialCapital
+  // FIXED: Get final equity from most recent trade (first in array since reverse chronological)
+  const finalEquity = trades.length > 0 ? trades[0].equity : initialCapital
   const peakEquity = trades.reduce((max, trade) => Math.max(max, trade.equity), initialCapital)
   
   // FIXED: Calculate proper maximum drawdown (peak-to-trough)
