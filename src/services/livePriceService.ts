@@ -525,7 +525,7 @@ class LivePriceService {
     // For long timeframes, use multi-batch fetching to get more data
     const isLongTimeframe = days > 1000
     if (isLongTimeframe) {
-      console.log(`Long timeframe requested (${days} days). Will use multiple API calls to fetch extended data.`)
+      console.log(`🚀 MULTI-BATCH: Long timeframe requested (${days} days). Will use multiple API calls to fetch extended data.`)
       return this.fetchExtendedHistoricalData(source, days)
     }
     
