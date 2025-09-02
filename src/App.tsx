@@ -188,7 +188,7 @@ function App() {
   }
 
   // Generate real strategy trades using actual historical market data
-  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short') => {
+  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', customParameters?: any) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
     try {
@@ -214,8 +214,11 @@ function App() {
         throw new Error(`No historical data received from ${source}`)
       }
       
-      // Apply selected strategy with its parameters
-      const { lookbackPeriod, rangeMultiplier, stopLossMultiplier, atrPeriod } = currentStrategy.parameters
+      // Use custom parameters if provided, otherwise fall back to strategy defaults
+      const parameters = customParameters || currentStrategy.parameters
+      const { lookbackPeriod, rangeMultiplier, stopLossMultiplier, atrPeriod } = parameters
+      
+      console.log(`Using parameters: lookback=${lookbackPeriod}, range=${rangeMultiplier}, stopLoss=${stopLossMultiplier}, atr=${atrPeriod}`)
       let equity = capital
       let position = null  // 'LONG', 'SHORT', or null
       let entryPrice = 0
@@ -458,13 +461,22 @@ function App() {
   // State to track selected timeframe from chart component
   const [selectedTimeframe, setSelectedTimeframe] = useState('6M')
   
+  // User-configurable strategy parameters (with defaults from current strategy)
+  const [userParameters, setUserParameters] = useState({
+    lookbackPeriod: tradingStrategies['breakout-long-short'].parameters.lookbackPeriod,
+    rangeMultiplier: tradingStrategies['breakout-long-short'].parameters.rangeMultiplier,
+    stopLossMultiplier: tradingStrategies['breakout-long-short'].parameters.stopLossMultiplier,
+    atrPeriod: tradingStrategies['breakout-long-short'].parameters.atrPeriod
+  })
+  
   // Manual backtest function - only runs when user clicks button
   const runBacktest = async () => {
     setTradesLoading(true)
     setBacktestCompleted(false)
     try {
       console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe, 'capital:', initialCapital, 'strategy:', selectedStrategy)
-      const result = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy)
+      console.log('Using custom parameters:', userParameters)
+      const result = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy, userParameters)
       console.log('Backtest completed:', result.trades.length, 'trades')
       setAllTrades(result.trades)
       setHistoricalDataCount(result.historicalDataCount)
@@ -1154,12 +1166,164 @@ function App() {
                   gap: '1rem' 
                 }}>
                   <div>
-                    <h4 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Strategy Parameters</h4>
-                    <div style={{ fontSize: '0.9rem', color: '#7d8590' }}>
-                      <div>Lookback Period: {tradingStrategies[selectedStrategy].parameters.lookbackPeriod}</div>
-                      <div>Range Multiplier: {tradingStrategies[selectedStrategy].parameters.rangeMultiplier}</div>
-                      <div>Stop Loss Multiplier: {tradingStrategies[selectedStrategy].parameters.stopLossMultiplier}</div>
-                      <div>ATR Period: {tradingStrategies[selectedStrategy].parameters.atrPeriod}</div>
+                    <h4 style={{ color: '#f0f6fc', marginBottom: '1rem' }}>Strategy Parameters</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      
+                      {/* Lookback Period */}
+                      <div>
+                        <label style={{ 
+                          display: 'block', 
+                          fontSize: '0.9rem', 
+                          color: '#f0f6fc', 
+                          marginBottom: '0.5rem',
+                          fontWeight: '500'
+                        }}>
+                          Lookback Period: {userParameters.lookbackPeriod}
+                        </label>
+                        <input
+                          type="range"
+                          min="5"
+                          max="50"
+                          value={userParameters.lookbackPeriod}
+                          onChange={(e) => setUserParameters(prev => ({
+                            ...prev,
+                            lookbackPeriod: parseInt(e.target.value)
+                          }))}
+                          style={{
+                            width: '100%',
+                            height: '4px',
+                            backgroundColor: '#30363d',
+                            outline: 'none',
+                            borderRadius: '2px'
+                          }}
+                        />
+                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                          Range: 5-50 (Default: 20)
+                        </div>
+                      </div>
+
+                      {/* Range Multiplier */}
+                      <div>
+                        <label style={{ 
+                          display: 'block', 
+                          fontSize: '0.9rem', 
+                          color: '#f0f6fc', 
+                          marginBottom: '0.5rem',
+                          fontWeight: '500'
+                        }}>
+                          Range Multiplier: {userParameters.rangeMultiplier}
+                        </label>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="2.0"
+                          step="0.1"
+                          value={userParameters.rangeMultiplier}
+                          onChange={(e) => setUserParameters(prev => ({
+                            ...prev,
+                            rangeMultiplier: parseFloat(e.target.value)
+                          }))}
+                          style={{
+                            width: '100%',
+                            height: '4px',
+                            backgroundColor: '#30363d',
+                            outline: 'none',
+                            borderRadius: '2px'
+                          }}
+                        />
+                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                          Range: 0.1-2.0 (Default: 0.5)
+                        </div>
+                      </div>
+
+                      {/* Stop Loss Multiplier */}
+                      <div>
+                        <label style={{ 
+                          display: 'block', 
+                          fontSize: '0.9rem', 
+                          color: '#f0f6fc', 
+                          marginBottom: '0.5rem',
+                          fontWeight: '500'
+                        }}>
+                          Stop Loss Multiplier: {userParameters.stopLossMultiplier}
+                        </label>
+                        <input
+                          type="range"
+                          min="1.0"
+                          max="5.0"
+                          step="0.1"
+                          value={userParameters.stopLossMultiplier}
+                          onChange={(e) => setUserParameters(prev => ({
+                            ...prev,
+                            stopLossMultiplier: parseFloat(e.target.value)
+                          }))}
+                          style={{
+                            width: '100%',
+                            height: '4px',
+                            backgroundColor: '#30363d',
+                            outline: 'none',
+                            borderRadius: '2px'
+                          }}
+                        />
+                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                          Range: 1.0-5.0 (Default: 2.5)
+                        </div>
+                      </div>
+
+                      {/* ATR Period */}
+                      <div>
+                        <label style={{ 
+                          display: 'block', 
+                          fontSize: '0.9rem', 
+                          color: '#f0f6fc', 
+                          marginBottom: '0.5rem',
+                          fontWeight: '500'
+                        }}>
+                          ATR Period: {userParameters.atrPeriod}
+                        </label>
+                        <input
+                          type="range"
+                          min="5"
+                          max="30"
+                          value={userParameters.atrPeriod}
+                          onChange={(e) => setUserParameters(prev => ({
+                            ...prev,
+                            atrPeriod: parseInt(e.target.value)
+                          }))}
+                          style={{
+                            width: '100%',
+                            height: '4px',
+                            backgroundColor: '#30363d',
+                            outline: 'none',
+                            borderRadius: '2px'
+                          }}
+                        />
+                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                          Range: 5-30 (Default: 14)
+                        </div>
+                      </div>
+
+                      {/* Reset to Defaults Button */}
+                      <button
+                        onClick={() => setUserParameters({
+                          lookbackPeriod: 20,
+                          rangeMultiplier: 0.5,
+                          stopLossMultiplier: 2.5,
+                          atrPeriod: 14
+                        })}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          border: '1px solid #30363d',
+                          borderRadius: '4px',
+                          backgroundColor: '#21262d',
+                          color: '#7d8590',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          marginTop: '0.5rem'
+                        }}
+                      >
+                        Reset to Defaults
+                      </button>
                     </div>
                   </div>
                   <div>
