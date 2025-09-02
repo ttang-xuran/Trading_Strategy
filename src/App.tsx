@@ -116,7 +116,10 @@ function App() {
         const yearStart = new Date(new Date().getFullYear(), 0, 1)
         return Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24))
       case '1Y': return 365
-      case 'All': return 9999 // Maximum possible - let each API handle its own limits
+      case '2Y': return 730
+      case '3Y': return 1095
+      case '5Y': return 1825
+      case '10Y': return 3650
       default: return 180
     }
   }
