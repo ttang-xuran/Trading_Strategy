@@ -517,12 +517,17 @@ class LivePriceService {
   
   /**
    * Get real historical OHLC data from specific source with enhanced error handling
+   * For long timeframes (>1000 days), uses multiple API calls to fetch extended data
    */
   async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
     console.log(`getHistoricalData called: source=${source}, days=${days}`)
     
-    // Always use the selected data source
-    // Each exchange will provide whatever historical data it has available
+    // For long timeframes, use multi-batch fetching to get more data
+    const isLongTimeframe = days > 1000
+    if (isLongTimeframe) {
+      console.log(`Long timeframe requested (${days} days). Will use multiple API calls to fetch extended data.`)
+      return this.fetchExtendedHistoricalData(source, days)
+    }
     
     try {
       let result: any[]
@@ -547,6 +552,7 @@ class LivePriceService {
           console.log(`Unknown source: ${source}, falling back to CoinGecko`)
           result = await this.fetchCoinGeckoHistorical(days)
       }
+      
       console.log(`Historical data fetch result: ${result.length} candles`)
       if (result.length === 0) {
         throw new Error(`No data returned from ${source} API`)
@@ -577,6 +583,102 @@ class LivePriceService {
       throw new Error(`All APIs failed for historical data: ${source} and fallbacks`)
     }
   }
+  
+  /**
+   * Fetch extended historical data using multiple batched API calls
+   */
+  private async fetchExtendedHistoricalData(source: string, totalDays: number): Promise<any[]> {
+    console.log(`fetchExtendedHistoricalData: Fetching ${totalDays} days from ${source} using multiple batches`)
+    
+    // Get API limits for each source
+    const apiLimits = {
+      'bitstamp': 1000,   // 1000 days max per call
+      'binance': 1000,    // 1000 days max per call  
+      'coingecko': 365,   // 365 days max per call for detailed data
+      'coinbase': 3000    // Coinbase can handle longer ranges with date parameters
+    }
+    
+    const batchSize = apiLimits[source.toLowerCase() as keyof typeof apiLimits] || 365
+    const numBatches = Math.ceil(totalDays / batchSize)
+    
+    console.log(`Using ${numBatches} batches of ${batchSize} days each for ${source}`)
+    
+    let allData: any[] = []
+    let endDate = new Date() // Start from today and go backwards
+    
+    for (let i = 0; i < numBatches; i++) {
+      try {
+        const startDate = new Date(endDate)
+        startDate.setDate(startDate.getDate() - batchSize)
+        
+        // Don't go beyond our total requested days
+        const remainingDays = totalDays - (i * batchSize)
+        const currentBatchDays = Math.min(batchSize, remainingDays)
+        
+        console.log(`Batch ${i + 1}/${numBatches}: Fetching ${currentBatchDays} days from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
+        
+        // Fetch this batch using date range approach
+        let batchData: any[]
+        switch (source.toLowerCase()) {
+          case 'coinbase':
+            batchData = await this.fetchCoinbaseHistoricalRange(startDate, endDate)
+            break
+          case 'bitstamp':
+            batchData = await this.fetchBitstampHistoricalRange(startDate, endDate) 
+            break
+          case 'binance':
+            batchData = await this.fetchBinanceHistoricalRange(startDate, endDate)
+            break
+          case 'coingecko':
+            batchData = await this.fetchCoinGeckoHistoricalRange(startDate, endDate)
+            break
+          default:
+            batchData = await this.fetchCoinGeckoHistoricalRange(startDate, endDate)
+        }
+        
+        if (batchData && batchData.length > 0) {
+          // Remove any overlap with existing data (based on timestamp)
+          const existingTimestamps = new Set(allData.map(item => item.timestamp))
+          const newData = batchData.filter(item => !existingTimestamps.has(item.timestamp))
+          
+          allData = [...allData, ...newData]
+          console.log(`Batch ${i + 1} completed: Added ${newData.length} new candles (${batchData.length} total, ${batchData.length - newData.length} duplicates removed)`)
+        } else {
+          console.warn(`Batch ${i + 1} returned no data`)
+        }
+        
+        // Move end date backwards for next batch
+        endDate = new Date(startDate)
+        endDate.setDate(endDate.getDate() - 1) // Avoid overlap
+        
+        // Add small delay between requests to be respectful to APIs
+        if (i < numBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        
+      } catch (error) {
+        console.error(`Batch ${i + 1} failed:`, error)
+        // Continue with other batches rather than failing completely
+      }
+    }
+    
+    // Sort all data by timestamp and remove any duplicates
+    allData.sort((a, b) => a.timestamp - b.timestamp)
+    const uniqueData = allData.filter((item, index, arr) => 
+      index === 0 || item.timestamp !== arr[index - 1].timestamp
+    )
+    
+    console.log(`Extended fetch completed: ${uniqueData.length} unique candles covering ${totalDays} days requested`)
+    
+    if (uniqueData.length > 0) {
+      const firstDate = new Date(uniqueData[0].timestamp)
+      const lastDate = new Date(uniqueData[uniqueData.length - 1].timestamp)
+      const actualDays = Math.ceil((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24))
+      console.log(`Actual date range: ${firstDate.toISOString().split('T')[0]} to ${lastDate.toISOString().split('T')[0]} (${actualDays} days)`)
+    }
+    
+    return uniqueData
+  }
 
   /**
    * Fetch historical data from any source
@@ -600,16 +702,18 @@ class LivePriceService {
     // Coinbase Pro API for historical candles
     let startTime: Date, endTime: Date
     
-    if (days >= 9999) {
-      // For "All" request, get maximum available data (Coinbase started trading BTC in 2015)
-      startTime = new Date('2015-01-01') // Coinbase Pro launch
-      endTime = new Date()
-      console.log('Fetching ALL Coinbase data from 2015 to now')
+    // Calculate date range - Coinbase has data going back several years
+    endTime = new Date()
+    startTime = new Date()
+    startTime.setDate(startTime.getDate() - days)
+    
+    // For very long timeframes, limit to Coinbase's available history (started ~2015)
+    const earliestDate = new Date('2015-01-01')
+    if (startTime < earliestDate) {
+      startTime = earliestDate
+      const actualDays = Math.ceil((endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60 * 24))
+      console.log(`Coinbase: Requested ${days} days, providing ${actualDays} days (from Coinbase launch in 2015)`)
     } else {
-      // Regular date range request
-      endTime = new Date()
-      startTime = new Date()
-      startTime.setDate(startTime.getDate() - days)
       console.log(`Fetching ${days} days of Coinbase data`)
     }
     
@@ -645,14 +749,10 @@ class LivePriceService {
     const step = 86400 // Daily candles
     let limit: number
     
-    if (days >= 9999) {
-      // For "All" request, get maximum available data (Bitstamp limit is ~1000)
-      limit = 1000 // Bitstamp API maximum
-      console.log('Fetching ALL Bitstamp data (1000 days max)')
-    } else {
-      limit = Math.min(days, 1000) // API limit
-      console.log(`Fetching ${limit} days of Bitstamp data`)
-    }
+    // For long timeframes, get maximum available data
+    // Bitstamp API limit is approximately 1000 days
+    limit = Math.min(days, 1000)
+    console.log(`Fetching ${limit} days of Bitstamp data (API maximum: 1000 days)`)
     
     const response = await fetch(
       `https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=${step}&limit=${limit}`
@@ -676,14 +776,10 @@ class LivePriceService {
     // Binance klines API - use limit only for better compatibility
     let limit: number
     
-    if (days >= 9999) {
-      // For "All" request, get maximum available data (Binance limit is 1000)
-      limit = 1000 // Binance API maximum
-      console.log('Fetching ALL Binance data (1000 days max)')
-    } else {
-      limit = Math.min(days, 1000) // API limit is 1000
-      console.log(`Binance API call: limit=${limit}`)
-    }
+    // For long timeframes, get maximum available data
+    // Binance API limit is 1000 days
+    limit = Math.min(days, 1000)
+    console.log(`Fetching ${limit} days of Binance data (API maximum: 1000 days)`)
     
     const response = await fetch(
       `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=${limit}`
@@ -708,22 +804,42 @@ class LivePriceService {
     // CoinGecko historical prices (limited to avoid rate limits)
     let limitedDays: number
     
-    if (days >= 9999) {
-      // For "All" request, try to get more data (CoinGecko free limit is ~365 days)
-      limitedDays = 365 // Maximum for free API
-      console.log('Fetching ALL CoinGecko data (365 days max for free API)')
+    // For long timeframes, get maximum available data from CoinGecko
+    // CoinGecko free API is limited to ~365 days for detailed data
+    // but can provide more data for longer periods with less granularity
+    if (days > 365) {
+      // For very long timeframes, CoinGecko can provide more data but with weekly/monthly intervals
+      limitedDays = Math.min(days, 3650) // Try up to 10 years but expect less granular data
+      console.log(`Fetching ${limitedDays} days of CoinGecko data (extended range, may have reduced granularity)`)
     } else {
-      limitedDays = Math.min(days, 365) // Use up to 365 days
-      console.log(`Fetching ${limitedDays} days of CoinGecko data`)
+      limitedDays = days
+      console.log(`Fetching ${limitedDays} days of CoinGecko data (daily granularity)`)
     }
     
+    // For longer periods, CoinGecko automatically switches to appropriate intervals
     const response = await fetch(
       `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${limitedDays}&interval=daily`
     )
     
-    if (!response.ok) throw new Error('CoinGecko historical API failed')
+    if (!response.ok) {
+      // If extended request fails, try with 365 day limit
+      if (limitedDays > 365) {
+        console.log('Extended CoinGecko request failed, falling back to 365 days')
+        const fallbackResponse = await fetch(
+          `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365&interval=daily`
+        )
+        if (!fallbackResponse.ok) throw new Error('CoinGecko historical API failed')
+        const fallbackData = await fallbackResponse.json()
+        return this.processCoinGeckoData(fallbackData)
+      }
+      throw new Error('CoinGecko historical API failed')
+    }
     
     const data = await response.json()
+    return this.processCoinGeckoData(data)
+  }
+  
+  private processCoinGeckoData(data: any): any[] {
     const prices = data.prices || []
     
     // Convert to daily OHLC (CoinGecko only gives price points, so we approximate)
@@ -756,6 +872,114 @@ class LivePriceService {
         }
       })
       .sort((a, b) => a.timestamp - b.timestamp)
+  }
+  
+  /**
+   * Date range fetch methods for batched historical data fetching
+   */
+  private async fetchCoinbaseHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+    console.log(`Fetching Coinbase data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    
+    const apiUrl = `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startDate.toISOString()}&end=${endDate.toISOString()}&granularity=86400`
+    
+    try {
+      const response = await fetch(apiUrl)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      
+      const data = await response.json()
+      
+      return data.map((candle: number[]) => ({
+        date: new Date(candle[0] * 1000),
+        open: candle[3],
+        high: candle[2], 
+        low: candle[1],
+        close: candle[4],
+        timestamp: candle[0] * 1000
+      }))
+    } catch (error) {
+      console.warn('Coinbase range API failed (likely CORS):', error)
+      throw error
+    }
+  }
+  
+  private async fetchBitstampHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+    console.log(`Fetching Bitstamp data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    
+    // Bitstamp doesn't support date ranges well, so calculate days and use limit
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    const limit = Math.min(daysDiff, 1000)
+    
+    const response = await fetch(
+      `https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=86400&limit=${limit}`
+    )
+    
+    if (!response.ok) throw new Error('Bitstamp range API failed')
+    
+    const data = await response.json()
+    
+    const result = data.data.ohlc.map((candle: any) => ({
+      date: new Date(parseInt(candle.timestamp) * 1000),
+      open: parseFloat(candle.open),
+      high: parseFloat(candle.high),
+      low: parseFloat(candle.low), 
+      close: parseFloat(candle.close),
+      timestamp: parseInt(candle.timestamp) * 1000
+    }))
+    
+    // Filter to date range since Bitstamp doesn't support date filtering
+    return result.filter(item => 
+      item.timestamp >= startDate.getTime() && 
+      item.timestamp <= endDate.getTime()
+    )
+  }
+  
+  private async fetchBinanceHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+    console.log(`Fetching Binance data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    
+    // Binance supports start/end times
+    const startTime = startDate.getTime()
+    const endTime = endDate.getTime()
+    
+    const response = await fetch(
+      `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime=${startTime}&endTime=${endTime}&limit=1000`
+    )
+    
+    if (!response.ok) throw new Error('Binance range API failed')
+    
+    const data = await response.json()
+    
+    return data.map((candle: any[]) => ({
+      date: new Date(candle[0]),
+      open: parseFloat(candle[1]),
+      high: parseFloat(candle[2]),
+      low: parseFloat(candle[3]),
+      close: parseFloat(candle[4]),
+      timestamp: candle[0]
+    }))
+  }
+  
+  private async fetchCoinGeckoHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+    console.log(`Fetching CoinGecko data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    
+    // Calculate days for CoinGecko API
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    const limitedDays = Math.min(daysDiff, 365)
+    
+    // CoinGecko doesn't support exact date ranges, but we can filter the results
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${limitedDays}&interval=daily`
+    )
+    
+    if (!response.ok) throw new Error('CoinGecko range API failed')
+    
+    const data = await response.json()
+    const processed = this.processCoinGeckoData(data)
+    
+    // Filter to requested date range
+    return processed.filter(item => 
+      item.timestamp >= startDate.getTime() && 
+      item.timestamp <= endDate.getTime()
+    )
   }
 
 
