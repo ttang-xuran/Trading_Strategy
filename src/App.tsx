@@ -98,12 +98,7 @@ interface TradingStrategy {
   id: StrategyType
   name: string
   description: string
-  parameters: {
-    lookbackPeriod: number
-    rangeMultiplier: number
-    stopLossMultiplier: number
-    atrPeriod: number
-  }
+  parameters: any // Flexible parameter structure for different strategies
 }
 
 const tradingStrategies: Record<StrategyType, TradingStrategy> = {
@@ -121,12 +116,17 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
   'trend-following': {
     id: 'trend-following',
     name: 'Trend Following',
-    description: 'Follows strong trends with moving average crossovers and momentum indicators (Coming Soon)',
+    description: 'Long-only trend following with SMA regime filter, ADX/Choppiness strength filters, Donchian breakouts, and ATR trailing stops',
     parameters: {
-      lookbackPeriod: 50,
-      rangeMultiplier: 1.0,
-      stopLossMultiplier: 3.0,
-      atrPeriod: 14
+      smaFastLen: 50,
+      smaSlowLen: 250,
+      donLen: 20,
+      atrMult: 5.0,
+      adxLen: 14,
+      adxTh: 15.0,
+      chopLen: 14,
+      chopTh: 55.0,
+      atrLen: 14
     }
   },
   'mean-reversion': {
@@ -188,6 +188,459 @@ function App() {
   }
 
   // Generate real strategy trades using actual historical market data
+  // Breakout strategy implementation
+  const generateBreakoutTrades = async (ohlcData: any[], parameters: any, equity: number, capital: number) => {
+    const { lookbackPeriod, rangeMultiplier, stopLossMultiplier, atrPeriod } = parameters
+    console.log(`Using breakout parameters: lookback=${lookbackPeriod}, range=${rangeMultiplier}, stopLoss=${stopLossMultiplier}, atr=${atrPeriod}`)
+    
+    let position = null  // 'LONG', 'SHORT', or null
+    let entryPrice = 0
+    let positionSize = 0
+    const trades = []
+    
+    // Pine Script state tracking
+    let pendingSignal = null // 'LONG', 'SHORT', or null
+    
+    // Calculate ATR
+    const calculateATR = (data: any[], period: number, index: number) => {
+      if (index < period) return 1000 // Default ATR for early periods
+      
+      let sum = 0
+      for (let i = Math.max(0, index - period + 1); i <= index; i++) {
+        const current = data[i]
+        const previous = i > 0 ? data[i - 1] : current
+        
+        const tr = Math.max(
+          current.high - current.low,
+          Math.abs(current.high - previous.close),
+          Math.abs(current.low - previous.close)
+        )
+        sum += tr
+      }
+      return sum / period
+    }
+    
+    // Process each day - COMPLETE Pine Script implementation
+    for (let i = lookbackPeriod; i < ohlcData.length; i++) {
+      const currentBar = ohlcData[i]
+      const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null
+      
+      // Add data validation for extreme price ranges
+      if (!currentBar || !currentBar.open || !currentBar.high || 
+          !currentBar.low || !currentBar.close || 
+          currentBar.open <= 0 || currentBar.high <= 0 || 
+          currentBar.low <= 0 || currentBar.close <= 0) {
+        console.warn(`Invalid price data at index ${i}, skipping`)
+        continue
+      }
+      
+      const atr = calculateATR(ohlcData, atrPeriod, i)
+      if (atr === 1000) continue // Skip if ATR not available
+      
+      // EXACT Pine Script Calculations
+      // highest_high = ta.highest(high, lookback_period)[1] - previous bars only
+      const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i)
+      if (lookbackBars.length === 0) continue
+      
+      const highestHigh = Math.max(...lookbackBars.map(bar => bar.high))
+      const lowestLow = Math.min(...lookbackBars.map(bar => bar.low))
+      const breakoutRange = highestHigh - lowestLow
+      
+      // upper_boundary = open + breakout_range * range_mult
+      // lower_boundary = open - breakout_range * range_mult  
+      const upperBoundary = currentBar.open + (breakoutRange * rangeMultiplier)
+      const lowerBoundary = currentBar.open - (breakoutRange * rangeMultiplier)
+      
+      // EXACT Pine Script Entry Logic (no date filter - use full dataset)
+      // go_long = high > upper_boundary
+      // go_short = low < lower_boundary
+      const goLong = currentBar.high > upperBoundary
+      const goShort = currentBar.low < lowerBoundary
+      
+      // STEP 1: Execute any pending signals from previous bar (Next-bar execution)
+      let positionChanged = false
+      
+      if (pendingSignal === 'LONG' && nextBar) {
+        // Close short if exists (strategy.close("Short", comment="Reverse to Long"))
+        if (position === 'SHORT') {
+          const exitPrice = nextBar.open
+          // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
+          // For SHORT: profit when price falls, so pnl = shares * (entryPrice - exitPrice)
+          const pnl = positionSize * (entryPrice - exitPrice)
+          equity += pnl
+          
+          trades.push({
+            date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'CLOSE SHORT',
+            price: exitPrice,
+            size: positionSize,
+            pnl: pnl,
+            equity: equity,
+            comment: 'Reverse to Long (Next Bar)'
+          })
+        }
+        
+        // Enter long (strategy.entry("Long", strategy.long))
+        if (nextBar) {
+          position = 'LONG'
+          entryPrice = nextBar.open
+          // CORRECTED: Store position size as BTC shares, not dollar amount
+          positionSize = (equity * 0.99) / entryPrice
+          positionChanged = true
+          
+          trades.push({
+            date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'ENTRY LONG',
+            price: entryPrice,
+            size: positionSize,
+            pnl: null,
+            equity: equity,
+            comment: 'Long Entry (Next Bar)'
+          })
+        }
+        pendingSignal = null
+      }
+      else if (pendingSignal === 'SHORT' && nextBar) {
+        // Close long if exists (strategy.close("Long", comment="Reverse to Short"))
+        if (position === 'LONG') {
+          const exitPrice = nextBar.open
+          // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
+          const pnl = positionSize * (exitPrice - entryPrice)
+          equity += pnl
+          
+          trades.push({
+            date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'CLOSE LONG',
+            price: exitPrice,
+            size: positionSize,
+            pnl: pnl,
+            equity: equity,
+            comment: 'Reverse to Short (Next Bar)'
+          })
+        }
+        
+        // Enter short (strategy.entry("Short", strategy.short))
+        if (nextBar) {
+          position = 'SHORT'
+          entryPrice = nextBar.open
+          // CORRECTED: Store position size as BTC shares, not dollar amount
+          positionSize = (equity * 0.99) / entryPrice
+          positionChanged = true
+          
+          trades.push({
+            date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'ENTRY SHORT',
+            price: entryPrice,
+            size: positionSize,
+            pnl: null,
+            equity: equity,
+            comment: 'Short Entry (Next Bar)'
+          })
+        }
+        pendingSignal = null
+      }
+      
+      // STEP 2: Check for new signals on current bar (for next bar execution)
+      // CRITICAL: Only trigger signals if opposite to current position (Pine Script behavior)
+      if (goLong && !positionChanged) {
+        // Only set LONG signal if we're NOT already LONG
+        if (position !== 'LONG') {
+          pendingSignal = 'LONG'
+        }
+      }
+      else if (goShort && !positionChanged) {
+        // Only set SHORT signal if we're NOT already SHORT
+        if (position !== 'SHORT') {
+          pendingSignal = 'SHORT'
+        }
+      }
+      
+      // STEP 3: PINE SCRIPT STOP LOSSES (Recalculated every bar, executed when hit)
+      // This matches: long_stop_price = strategy.position_avg_price - atr * stop_loss_mult (every bar)
+      //               if strategy.position_size > 0: strategy.exit("SL Long", stop=long_stop_price)
+      if (position !== null && !positionChanged) {
+        if (position === 'LONG') {
+          // Recalculate stop price every bar with current ATR (Pine Script behavior)
+          const longStopPrice = entryPrice - (atr * stopLossMultiplier)
+          // Execute immediately if current bar hits the dynamically updated stop level
+          if (currentBar.low <= longStopPrice) {
+            const exitPrice = longStopPrice
+            const pnl = positionSize * (exitPrice - entryPrice)
+            equity += pnl
+            
+            trades.push({
+              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'STOP LOSS LONG',
+              price: exitPrice,
+              size: positionSize,
+              pnl: pnl,
+              equity: equity,
+              comment: `Stop Loss Hit (ATR: ${atr.toFixed(2)})`
+            })
+            
+            position = null
+            entryPrice = 0
+            positionSize = 0
+            positionChanged = true
+          }
+        }
+        else if (position === 'SHORT') {
+          // Recalculate stop price every bar with current ATR (Pine Script behavior)
+          const shortStopPrice = entryPrice + (atr * stopLossMultiplier)
+          // Execute immediately if current bar hits the dynamically updated stop level  
+          if (currentBar.high >= shortStopPrice) {
+            const exitPrice = shortStopPrice
+            const pnl = positionSize * (entryPrice - exitPrice)
+            equity += pnl
+            
+            trades.push({
+              date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              action: 'STOP LOSS SHORT',
+              price: exitPrice,
+              size: positionSize,
+              pnl: pnl,
+              equity: equity,
+              comment: `Stop Loss Hit (ATR: ${atr.toFixed(2)})`
+            })
+            
+            position = null
+            entryPrice = 0
+            positionSize = 0
+            positionChanged = true
+          }
+        }
+      }
+    }
+    
+    console.log(`Generated ${trades.length} breakout trades`)
+    return {
+      trades: trades.reverse(), // Most recent first
+      historicalDataCount: ohlcData.length
+    }
+  }
+
+  // Trend Following strategy implementation
+  const generateTrendFollowingTrades = async (ohlcData: any[], parameters: any, equity: number, capital: number) => {
+    const { smaFastLen, smaSlowLen, donLen, atrMult, adxLen, adxTh, chopLen, chopTh, atrLen } = parameters
+    console.log(`Using trend following parameters: smaFast=${smaFastLen}, smaSlow=${smaSlowLen}, donLen=${donLen}, atrMult=${atrMult}`)
+    
+    let position = null  // 'LONG' or null (long-only strategy)
+    let entryPrice = 0
+    let positionSize = 0
+    let peakClose = null // For ATR trailing stop
+    const trades = []
+    
+    // Technical indicator calculation helpers
+    const calculateSMA = (data: any[], period: number, index: number) => {
+      if (index < period - 1) return null
+      let sum = 0
+      for (let i = index - period + 1; i <= index; i++) {
+        sum += data[i].close
+      }
+      return sum / period
+    }
+    
+    const calculateATR = (data: any[], period: number, index: number) => {
+      if (index < period) return null
+      let sum = 0
+      for (let i = Math.max(0, index - period + 1); i <= index; i++) {
+        const current = data[i]
+        const previous = i > 0 ? data[i - 1] : current
+        const tr = Math.max(
+          current.high - current.low,
+          Math.abs(current.high - previous.close),
+          Math.abs(current.low - previous.close)
+        )
+        sum += tr
+      }
+      return sum / period
+    }
+    
+    const calculateRMA = (values: number[], period: number) => {
+      if (values.length < period) return null
+      let rma = values[0]
+      for (let i = 1; i < values.length; i++) {
+        rma = (rma * (period - 1) + values[i]) / period
+      }
+      return rma
+    }
+    
+    const calculateADX = (data: any[], period: number, index: number) => {
+      if (index < period * 2) return null
+      
+      let plusDMs = []
+      let minusDMs = []
+      let trs = []
+      
+      for (let i = Math.max(1, index - period * 2); i <= index; i++) {
+        const chH = data[i].high - data[i - 1].high
+        const chL = data[i - 1].low - data[i].low
+        const plusDM = (chH > chL && chH > 0) ? chH : 0
+        const minusDM = (chL > chH && chL > 0) ? chL : 0
+        const tr = Math.max(
+          data[i].high - data[i].low,
+          Math.abs(data[i].high - data[i - 1].close),
+          Math.abs(data[i].low - data[i - 1].close)
+        )
+        
+        plusDMs.push(plusDM)
+        minusDMs.push(minusDM)
+        trs.push(tr)
+      }
+      
+      const trRMA = calculateRMA(trs.slice(-period), period)
+      const pdmRMA = calculateRMA(plusDMs.slice(-period), period)
+      const mdmRMA = calculateRMA(minusDMs.slice(-period), period)
+      
+      if (!trRMA || trRMA === 0) return null
+      
+      const plusDI = 100 * (pdmRMA / trRMA)
+      const minusDI = 100 * (mdmRMA / trRMA)
+      const dx = 100 * (Math.abs(plusDI - minusDI) / Math.max(plusDI + minusDI, 1e-10))
+      
+      return dx // Simplified ADX calculation
+    }
+    
+    const calculateChoppiness = (data: any[], period: number, index: number) => {
+      if (index < period) return null
+      
+      let sumTR = 0
+      let highest = data[index - period + 1].high
+      let lowest = data[index - period + 1].low
+      
+      for (let i = index - period + 1; i <= index; i++) {
+        const current = data[i]
+        const previous = i > 0 ? data[i - 1] : current
+        const tr = Math.max(
+          current.high - current.low,
+          Math.abs(current.high - previous.close),
+          Math.abs(current.low - previous.close)
+        )
+        sumTR += tr
+        highest = Math.max(highest, current.high)
+        lowest = Math.min(lowest, current.low)
+      }
+      
+      const range = highest - lowest
+      if (range === 0) return 100
+      
+      return 100 * (Math.log10(sumTR / range) / Math.log10(period))
+    }
+    
+    const getDonchianHigh = (data: any[], period: number, index: number) => {
+      if (index < period) return null
+      let highest = data[index - period].high // Previous bars only [1]
+      for (let i = index - period + 1; i < index; i++) {
+        highest = Math.max(highest, data[i].high)
+      }
+      return highest
+    }
+    
+    // Process each day
+    for (let i = Math.max(smaSlowLen, adxLen * 2, chopLen); i < ohlcData.length; i++) {
+      const currentBar = ohlcData[i]
+      
+      // Skip invalid data
+      if (!currentBar || !currentBar.close || currentBar.close <= 0) {
+        continue
+      }
+      
+      // Calculate indicators
+      const smaFast = calculateSMA(ohlcData, smaFastLen, i)
+      const smaSlow = calculateSMA(ohlcData, smaSlowLen, i)
+      const donUp = getDonchianHigh(ohlcData, donLen, i)
+      const adx = calculateADX(ohlcData, adxLen, i)
+      const chop = calculateChoppiness(ohlcData, chopLen, i)
+      const atr = calculateATR(ohlcData, atrLen, i)
+      
+      if (!smaFast || !smaSlow || !donUp || !adx || !chop || !atr) {
+        continue
+      }
+      
+      // Trend Following conditions
+      const regimeUp = currentBar.close > smaSlow && smaFast > smaSlow
+      const strength = adx > adxTh && chop < chopTh
+      const breakout = currentBar.close > donUp
+      const goLong = regimeUp && strength && breakout
+      
+      // Entry logic
+      if (goLong && position !== 'LONG') {
+        // Close any existing position first (though this is long-only)
+        if (position === 'LONG') {
+          const exitPrice = currentBar.close
+          const pnl = positionSize * (exitPrice - entryPrice)
+          equity += pnl
+          
+          trades.push({
+            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: 'CLOSE LONG',
+            price: exitPrice,
+            size: positionSize,
+            pnl: pnl,
+            equity: equity,
+            comment: 'Exit before new entry'
+          })
+        }
+        
+        // Enter long
+        position = 'LONG'
+        entryPrice = currentBar.close
+        positionSize = (equity * 0.99) / entryPrice // 99% allocation with 1% cash buffer
+        peakClose = currentBar.close
+        
+        trades.push({
+          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: 'ENTRY LONG',
+          price: entryPrice,
+          size: positionSize,
+          pnl: null,
+          equity: equity,
+          comment: `Trend Entry (ADX: ${adx.toFixed(1)}, CHOP: ${chop.toFixed(1)})`
+        })
+      }
+      
+      // Exit logic for long positions
+      if (position === 'LONG') {
+        // Update peak close for trailing stop
+        peakClose = Math.max(peakClose, currentBar.close)
+        
+        // Calculate trailing stop
+        const trailStop = peakClose - atrMult * atr
+        
+        // Check trend exit
+        const trendExit = currentBar.close < smaFast
+        
+        // Exit conditions
+        if (currentBar.low <= trailStop || trendExit) {
+          const exitPrice = trendExit ? currentBar.close : trailStop
+          const pnl = positionSize * (exitPrice - entryPrice)
+          equity += pnl
+          
+          trades.push({
+            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: trendExit ? 'TREND EXIT' : 'ATR TRAIL STOP',
+            price: exitPrice,
+            size: positionSize,
+            pnl: pnl,
+            equity: equity,
+            comment: trendExit ? 'Below SMA Fast' : `ATR Trail (${atrMult}x)`
+          })
+          
+          position = null
+          entryPrice = 0
+          positionSize = 0
+          peakClose = null
+        }
+      }
+    }
+    
+    console.log(`Generated ${trades.length} trend following trades`)
+    return {
+      trades: trades.reverse(), // Most recent first
+      historicalDataCount: ohlcData.length
+    }
+  }
+
   const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', customParameters?: any) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
@@ -198,9 +651,9 @@ function App() {
         throw new Error(`Unknown strategy: ${strategyType}`)
       }
       
-      // Only allow breakout-long-short for now, others are coming soon
-      if (strategyType !== 'breakout-long-short') {
-        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently only "Breakout for long and short" is available.`)
+      // Only allow implemented strategies
+      if (strategyType !== 'breakout-long-short' && strategyType !== 'trend-following') {
+        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently available: "Breakout for long and short" and "Trend Following".`)
       }
       
       // Get REAL historical OHLC data from the selected exchange for the selected timeframe
@@ -216,233 +669,18 @@ function App() {
       
       // Use custom parameters if provided, otherwise fall back to strategy defaults
       const parameters = customParameters || currentStrategy.parameters
-      const { lookbackPeriod, rangeMultiplier, stopLossMultiplier, atrPeriod } = parameters
       
-      console.log(`Using parameters: lookback=${lookbackPeriod}, range=${rangeMultiplier}, stopLoss=${stopLossMultiplier}, atr=${atrPeriod}`)
       let equity = capital
       let position = null  // 'LONG', 'SHORT', or null
       let entryPrice = 0
       let positionSize = 0
       const trades = []
       
-      // Pine Script state tracking
-      let pendingSignal = null // 'LONG', 'SHORT', or null
-      
-      // Calculate ATR
-      const calculateATR = (data: any[], period: number, index: number) => {
-        if (index < period) return 1000 // Default ATR for early periods
-        
-        let sum = 0
-        for (let i = Math.max(0, index - period + 1); i <= index; i++) {
-          const current = data[i]
-          const previous = i > 0 ? data[i - 1] : current
-          
-          const tr = Math.max(
-            current.high - current.low,
-            Math.abs(current.high - previous.close),
-            Math.abs(current.low - previous.close)
-          )
-          sum += tr
-        }
-        return sum / period
-      }
-      
-      // Process each day - COMPLETE Pine Script implementation
-      for (let i = lookbackPeriod; i < ohlcData.length; i++) {
-        const currentBar = ohlcData[i]
-        const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null
-        
-        // Add data validation for extreme price ranges
-        if (!currentBar || !currentBar.open || !currentBar.high || 
-            !currentBar.low || !currentBar.close || 
-            currentBar.open <= 0 || currentBar.high <= 0 || 
-            currentBar.low <= 0 || currentBar.close <= 0) {
-          console.warn(`Invalid price data at index ${i}, skipping`)
-          continue
-        }
-        
-        const atr = calculateATR(ohlcData, atrPeriod, i)
-        if (atr === 1000) continue // Skip if ATR not available
-        
-        // EXACT Pine Script Calculations
-        // highest_high = ta.highest(high, lookback_period)[1] - previous bars only
-        const lookbackBars = ohlcData.slice(Math.max(0, i - lookbackPeriod), i)
-        if (lookbackBars.length === 0) continue
-        
-        const highestHigh = Math.max(...lookbackBars.map(bar => bar.high))
-        const lowestLow = Math.min(...lookbackBars.map(bar => bar.low))
-        const breakoutRange = highestHigh - lowestLow
-        
-        // upper_boundary = open + breakout_range * range_mult
-        // lower_boundary = open - breakout_range * range_mult  
-        const upperBoundary = currentBar.open + (breakoutRange * rangeMultiplier)
-        const lowerBoundary = currentBar.open - (breakoutRange * rangeMultiplier)
-        
-        // EXACT Pine Script Entry Logic (no date filter - use full dataset)
-        // go_long = high > upper_boundary
-        // go_short = low < lower_boundary
-        const goLong = currentBar.high > upperBoundary
-        const goShort = currentBar.low < lowerBoundary
-        
-        // STEP 1: Execute any pending signals from previous bar (Next-bar execution)
-        let positionChanged = false
-        
-        if (pendingSignal === 'LONG' && nextBar) {
-          // Close short if exists (strategy.close("Short", comment="Reverse to Long"))
-          if (position === 'SHORT') {
-            const exitPrice = nextBar.open
-            // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
-            // For SHORT: profit when price falls, so pnl = shares * (entryPrice - exitPrice)
-            const pnl = positionSize * (entryPrice - exitPrice)
-            equity += pnl
-            
-            trades.push({
-              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'CLOSE SHORT',
-              price: exitPrice,
-              size: positionSize,
-              pnl: pnl,
-              equity: equity,
-              comment: 'Reverse to Long (Next Bar)'
-            })
-          }
-          
-          // Enter long (strategy.entry("Long", strategy.long))
-          if (nextBar) {
-            position = 'LONG'
-            entryPrice = nextBar.open
-            // CORRECTED: Store position size as BTC shares, not dollar amount
-            positionSize = (equity * 0.99) / entryPrice
-            positionChanged = true
-            
-            trades.push({
-              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'ENTRY LONG',
-              price: entryPrice,
-              size: positionSize,
-              pnl: null,
-              equity: equity,
-              comment: 'Long Entry (Next Bar)'
-            })
-          }
-          pendingSignal = null
-        }
-        else if (pendingSignal === 'SHORT' && nextBar) {
-          // Close long if exists (strategy.close("Long", comment="Reverse to Short"))
-          if (position === 'LONG') {
-            const exitPrice = nextBar.open
-            // CORRECTED: positionSize is already in BTC shares, so P&L = shares * price_change
-            const pnl = positionSize * (exitPrice - entryPrice)
-            equity += pnl
-            
-            trades.push({
-              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'CLOSE LONG',
-              price: exitPrice,
-              size: positionSize,
-              pnl: pnl,
-              equity: equity,
-              comment: 'Reverse to Short (Next Bar)'
-            })
-          }
-          
-          // Enter short (strategy.entry("Short", strategy.short))
-          if (nextBar) {
-            position = 'SHORT'
-            entryPrice = nextBar.open
-            // CORRECTED: Store position size as BTC shares, not dollar amount
-            positionSize = (equity * 0.99) / entryPrice
-            positionChanged = true
-            
-            trades.push({
-              date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              action: 'ENTRY SHORT',
-              price: entryPrice,
-              size: positionSize,
-              pnl: null,
-              equity: equity,
-              comment: 'Short Entry (Next Bar)'
-            })
-          }
-          pendingSignal = null
-        }
-        
-        // STEP 2: Check for new signals on current bar (for next bar execution)
-        // CRITICAL: Only trigger signals if opposite to current position (Pine Script behavior)
-        if (goLong && !positionChanged) {
-          // Only set LONG signal if we're NOT already LONG
-          if (position !== 'LONG') {
-            pendingSignal = 'LONG'
-          }
-        }
-        else if (goShort && !positionChanged) {
-          // Only set SHORT signal if we're NOT already SHORT
-          if (position !== 'SHORT') {
-            pendingSignal = 'SHORT'
-          }
-        }
-        
-        // STEP 3: PINE SCRIPT STOP LOSSES (Recalculated every bar, executed when hit)
-        // This matches: long_stop_price = strategy.position_avg_price - atr * stop_loss_mult (every bar)
-        //               if strategy.position_size > 0: strategy.exit("SL Long", stop=long_stop_price)
-        if (position !== null && !positionChanged) {
-          if (position === 'LONG') {
-            // Recalculate stop price every bar with current ATR (Pine Script behavior)
-            const longStopPrice = entryPrice - (atr * stopLossMultiplier)
-            // Execute immediately if current bar hits the dynamically updated stop level
-            if (currentBar.low <= longStopPrice) {
-              const exitPrice = longStopPrice
-              const pnl = positionSize * (exitPrice - entryPrice)
-              equity += pnl
-              
-              trades.push({
-                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                action: 'STOP LOSS LONG',
-                price: exitPrice,
-                size: positionSize,
-                pnl: pnl,
-                equity: equity,
-                comment: `Stop Loss Hit (ATR: ${atr.toFixed(2)})`
-              })
-              
-              position = null
-              entryPrice = 0
-              positionSize = 0
-              positionChanged = true
-            }
-          }
-          else if (position === 'SHORT') {
-            // Recalculate stop price every bar with current ATR (Pine Script behavior)
-            const shortStopPrice = entryPrice + (atr * stopLossMultiplier)
-            // Execute immediately if current bar hits the dynamically updated stop level  
-            if (currentBar.high >= shortStopPrice) {
-              const exitPrice = shortStopPrice
-              const pnl = positionSize * (entryPrice - exitPrice)
-              equity += pnl
-              
-              trades.push({
-                date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                action: 'STOP LOSS SHORT',
-                price: exitPrice,
-                size: positionSize,
-                pnl: pnl,
-                equity: equity,
-                comment: `Stop Loss Hit (ATR: ${atr.toFixed(2)})`
-              })
-              
-              position = null
-              entryPrice = 0
-              positionSize = 0
-              positionChanged = true
-            }
-          }
-        }
-      }
-      
-      console.log(`Generated ${trades.length} trades`)
-      return {
-        trades: trades.reverse(), // Most recent first
-        historicalDataCount: ohlcData.length
+      // Strategy-specific implementation
+      if (strategyType === 'breakout-long-short') {
+        return await generateBreakoutTrades(ohlcData, parameters, equity, capital)
+      } else if (strategyType === 'trend-following') {
+        return await generateTrendFollowingTrades(ohlcData, parameters, equity, capital)
       }
       
     } catch (error) {
@@ -461,13 +699,17 @@ function App() {
   // State to track selected timeframe from chart component
   const [selectedTimeframe, setSelectedTimeframe] = useState('6M')
   
-  // User-configurable strategy parameters (with defaults from current strategy)
-  const [userParameters, setUserParameters] = useState({
-    lookbackPeriod: tradingStrategies['breakout-long-short'].parameters.lookbackPeriod,
-    rangeMultiplier: tradingStrategies['breakout-long-short'].parameters.rangeMultiplier,
-    stopLossMultiplier: tradingStrategies['breakout-long-short'].parameters.stopLossMultiplier,
-    atrPeriod: tradingStrategies['breakout-long-short'].parameters.atrPeriod
-  })
+  // User-configurable strategy parameters (dynamically set based on selected strategy)
+  const [userParameters, setUserParameters] = useState(
+    tradingStrategies['breakout-long-short'].parameters
+  )
+
+  // Update user parameters when strategy changes
+  useEffect(() => {
+    if (tradingStrategies[selectedStrategy]) {
+      setUserParameters(tradingStrategies[selectedStrategy].parameters)
+    }
+  }, [selectedStrategy])
   
   // Manual backtest function - only runs when user clicks button
   const runBacktest = async () => {
@@ -806,12 +1048,12 @@ function App() {
                 <option 
                   key={strategy.id} 
                   value={strategy.id}
-                  disabled={strategy.id !== 'breakout-long-short'}
+                  disabled={strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following'}
                   style={{
-                    color: strategy.id !== 'breakout-long-short' ? '#999' : 'black'
+                    color: (strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following') ? '#999' : 'black'
                   }}
                 >
-                  {strategy.name} {strategy.id !== 'breakout-long-short' ? '(Coming Soon)' : ''}
+                  {strategy.name} {(strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following') ? '(Coming Soon)' : ''}
                 </option>
               ))}
             </select>
@@ -1169,148 +1411,353 @@ function App() {
                     <h4 style={{ color: '#f0f6fc', marginBottom: '1rem' }}>Strategy Parameters</h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       
-                      {/* Lookback Period */}
-                      <div>
-                        <label style={{ 
-                          display: 'block', 
-                          fontSize: '0.9rem', 
-                          color: '#f0f6fc', 
-                          marginBottom: '0.5rem',
-                          fontWeight: '500'
-                        }}>
-                          Lookback Period: {userParameters.lookbackPeriod}
-                        </label>
-                        <input
-                          type="range"
-                          min="5"
-                          max="50"
-                          value={userParameters.lookbackPeriod}
-                          onChange={(e) => setUserParameters(prev => ({
-                            ...prev,
-                            lookbackPeriod: parseInt(e.target.value)
-                          }))}
-                          style={{
-                            width: '100%',
-                            height: '4px',
-                            backgroundColor: '#30363d',
-                            outline: 'none',
-                            borderRadius: '2px'
-                          }}
-                        />
-                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
-                          Range: 5-50 (Default: 20)
-                        </div>
-                      </div>
+                      {/* Dynamic parameter controls based on selected strategy */}
+                      {selectedStrategy === 'breakout-long-short' && (
+                        <>
+                          {/* Lookback Period */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Lookback Period: {userParameters.lookbackPeriod}
+                            </label>
+                            <input
+                              type="range"
+                              min="5"
+                              max="50"
+                              value={userParameters.lookbackPeriod}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                lookbackPeriod: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 5-50 (Default: 20)
+                            </div>
+                          </div>
 
-                      {/* Range Multiplier */}
-                      <div>
-                        <label style={{ 
-                          display: 'block', 
-                          fontSize: '0.9rem', 
-                          color: '#f0f6fc', 
-                          marginBottom: '0.5rem',
-                          fontWeight: '500'
-                        }}>
-                          Range Multiplier: {userParameters.rangeMultiplier}
-                        </label>
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="2.0"
-                          step="0.1"
-                          value={userParameters.rangeMultiplier}
-                          onChange={(e) => setUserParameters(prev => ({
-                            ...prev,
-                            rangeMultiplier: parseFloat(e.target.value)
-                          }))}
-                          style={{
-                            width: '100%',
-                            height: '4px',
-                            backgroundColor: '#30363d',
-                            outline: 'none',
-                            borderRadius: '2px'
-                          }}
-                        />
-                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
-                          Range: 0.1-2.0 (Default: 0.5)
-                        </div>
-                      </div>
+                          {/* Range Multiplier */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Range Multiplier: {userParameters.rangeMultiplier}
+                            </label>
+                            <input
+                              type="range"
+                              min="0.1"
+                              max="2.0"
+                              step="0.1"
+                              value={userParameters.rangeMultiplier}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                rangeMultiplier: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 0.1-2.0 (Default: 0.5)
+                            </div>
+                          </div>
 
-                      {/* Stop Loss Multiplier */}
-                      <div>
-                        <label style={{ 
-                          display: 'block', 
-                          fontSize: '0.9rem', 
-                          color: '#f0f6fc', 
-                          marginBottom: '0.5rem',
-                          fontWeight: '500'
-                        }}>
-                          Stop Loss Multiplier: {userParameters.stopLossMultiplier}
-                        </label>
-                        <input
-                          type="range"
-                          min="1.0"
-                          max="5.0"
-                          step="0.1"
-                          value={userParameters.stopLossMultiplier}
-                          onChange={(e) => setUserParameters(prev => ({
-                            ...prev,
-                            stopLossMultiplier: parseFloat(e.target.value)
-                          }))}
-                          style={{
-                            width: '100%',
-                            height: '4px',
-                            backgroundColor: '#30363d',
-                            outline: 'none',
-                            borderRadius: '2px'
-                          }}
-                        />
-                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
-                          Range: 1.0-5.0 (Default: 2.5)
-                        </div>
-                      </div>
+                          {/* Stop Loss Multiplier */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Stop Loss Multiplier: {userParameters.stopLossMultiplier}
+                            </label>
+                            <input
+                              type="range"
+                              min="1.0"
+                              max="5.0"
+                              step="0.1"
+                              value={userParameters.stopLossMultiplier}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                stopLossMultiplier: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 1.0-5.0 (Default: 2.5)
+                            </div>
+                          </div>
 
-                      {/* ATR Period */}
-                      <div>
-                        <label style={{ 
-                          display: 'block', 
-                          fontSize: '0.9rem', 
-                          color: '#f0f6fc', 
-                          marginBottom: '0.5rem',
-                          fontWeight: '500'
-                        }}>
-                          ATR Period: {userParameters.atrPeriod}
-                        </label>
-                        <input
-                          type="range"
-                          min="5"
-                          max="30"
-                          value={userParameters.atrPeriod}
-                          onChange={(e) => setUserParameters(prev => ({
-                            ...prev,
-                            atrPeriod: parseInt(e.target.value)
-                          }))}
-                          style={{
-                            width: '100%',
-                            height: '4px',
-                            backgroundColor: '#30363d',
-                            outline: 'none',
-                            borderRadius: '2px'
-                          }}
-                        />
-                        <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
-                          Range: 5-30 (Default: 14)
-                        </div>
-                      </div>
+                          {/* ATR Period */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ATR Period: {userParameters.atrPeriod}
+                            </label>
+                            <input
+                              type="range"
+                              min="5"
+                              max="30"
+                              value={userParameters.atrPeriod}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                atrPeriod: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 5-30 (Default: 14)
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {selectedStrategy === 'trend-following' && (
+                        <>
+                          {/* SMA Fast Length */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              SMA Fast Length: {userParameters.smaFastLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="100"
+                              value={userParameters.smaFastLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                smaFastLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-100 (Default: 50)
+                            </div>
+                          </div>
+
+                          {/* SMA Slow Length */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              SMA Slow Length: {userParameters.smaSlowLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="100"
+                              max="500"
+                              value={userParameters.smaSlowLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                smaSlowLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 100-500 (Default: 250)
+                            </div>
+                          </div>
+
+                          {/* Donchian Length */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Donchian Breakout Length: {userParameters.donLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="50"
+                              value={userParameters.donLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                donLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-50 (Default: 20)
+                            </div>
+                          </div>
+
+                          {/* ATR Multiplier */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ATR Trail Multiplier: {userParameters.atrMult}
+                            </label>
+                            <input
+                              type="range"
+                              min="1.0"
+                              max="10.0"
+                              step="0.1"
+                              value={userParameters.atrMult}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                atrMult: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 1.0-10.0 (Default: 5.0)
+                            </div>
+                          </div>
+
+                          {/* ADX Threshold */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ADX Threshold: {userParameters.adxTh}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="50"
+                              step="1"
+                              value={userParameters.adxTh}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                adxTh: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-50 (Default: 15)
+                            </div>
+                          </div>
+
+                          {/* Choppiness Threshold */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Choppiness Threshold: {userParameters.chopTh}
+                            </label>
+                            <input
+                              type="range"
+                              min="30"
+                              max="80"
+                              step="1"
+                              value={userParameters.chopTh}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                chopTh: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 30-80 (Default: 55)
+                            </div>
+                          </div>
+                        </>
+                      )}
 
                       {/* Reset to Defaults Button */}
                       <button
-                        onClick={() => setUserParameters({
-                          lookbackPeriod: 20,
-                          rangeMultiplier: 0.5,
-                          stopLossMultiplier: 2.5,
-                          atrPeriod: 14
-                        })}
+                        onClick={() => setUserParameters(tradingStrategies[selectedStrategy].parameters)}
                         style={{
                           padding: '0.5rem 1rem',
                           border: '1px solid #30363d',

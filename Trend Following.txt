@@ -1,0 +1,95 @@
+// @version=5
+strategy("Mature Assets 1D: Regime + Breakout + ATR Trail (Long Only) - BTC 2020+ Optimized",
+     overlay=true,
+     initial_capital=10000,
+     commission_type=strategy.commission.percent, commission_value=0.1,
+     slippage=1,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=100,
+     pyramiding=0,
+     calc_on_every_tick=false, process_orders_on_close=true)
+
+// ===== Inputs (Optimized for BTC-USD 1D, 2020-Present) =====
+startDate = input.time(timestamp("2020-01-01 00:00 +0000"), "Start")
+endDate   = input.time(timestamp("2025-08-27 00:00 +0000"), "End")
+inDate    = time >= startDate and time <= endDate
+
+// -- Core Strategy Parameters --
+smaFastLen = input.int(50, "SMA Fast (Optimized)")
+smaSlowLen = input.int(250, "SMA Slow")
+donLen     = input.int(20, "Donchian Breakout Length (Optimized)")
+atrMult    = input.float(5.0, "ATR Trail Multiplier (Optimized)")
+
+// -- Filter Parameters --
+adxLen     = input.int(14, "ADX Length")
+adxTh      = input.float(15.0, "ADX Threshold (Optimized)")
+chopLen    = input.int(14, "Choppiness Length")
+chopTh     = input.float(55.0, "Choppiness Threshold (Optimized)")
+atrLen     = input.int(14, "ATR Length")
+
+// -- Visuals --
+showDiag   = input.bool(true, "Show Diagnostics?")
+
+// ===== Core MAs =====
+smaFast = ta.sma(close, smaFastLen)
+smaSlow = ta.sma(close, smaSlowLen)
+
+// ===== Wilder DMI/ADX (manual; no ta.adx/ta.diPlus/ta.diMinus) =====
+chH = ta.change(high)
+chL = -ta.change(low)
+plusDM = (chH > chL and chH > 0) ? chH : 0.0
+minusDM = (chL > chH and chL > 0) ? chL : 0.0
+tr1 = ta.tr(true)
+trRMA = ta.rma(tr1, adxLen)
+pdmRMA = ta.rma(plusDM, adxLen)
+mdmRMA = ta.rma(minusDM, adxLen)
+plusDI = 100.0 * (pdmRMA / math.max(trRMA, 1e-10))
+minusDI = 100.0 * (mdmRMA / math.max(trRMA, 1e-10))
+dx = 100.0 * (math.abs(plusDI - minusDI) / math.max(plusDI + minusDI, 1e-10))
+adx = ta.rma(dx, adxLen)
+
+// ===== Choppiness Index =====
+sumTR = ta.sma(tr1, chopLen) * chopLen
+hh = ta.highest(high, chopLen)
+ll = ta.lowest(low, chopLen)
+chop = 100.0 * (math.log10(sumTR / math.max(hh - ll, syminfo.mintick)) / math.log10(chopLen))
+
+// ===== Donchian breakout on prior bar =====
+donUp = ta.highest(high, donLen)[1]
+
+// ===== Conditions =====
+regimeUp = close > smaSlow and smaFast > smaSlow
+strength = adx > adxTh and chop < chopTh
+breakout = close > donUp
+goLong = inDate and regimeUp and strength and breakout
+
+// ===== Trailing stop & trend exit =====
+var float peakClose = na
+if strategy.position_size > 0
+    peakClose := na(peakClose) ? close : math.max(peakClose, close)
+else
+    peakClose := na
+
+atr = ta.sma(tr1, atrLen)
+trailStop = peakClose - atrMult * atr
+trendExit = close < smaFast
+
+// ===== Orders =====
+if goLong and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if strategy.position_size > 0
+    strategy.exit("Exit-ATR", "Long", stop=na(trailStop) ? na : trailStop)
+    if trendExit
+        strategy.close("Long")
+
+// ===== Plots =====
+plot(smaFast, "SMA Fast", color=color.new(color.teal, 0))
+plot(smaSlow, "SMA Slow", color=color.new(color.orange, 0))
+plot(donUp, "Donchian Upper (prev)", color=color.new(color.fuchsia, 0))
+plot(trailStop, "ATR Trail", color=color.new(color.red, 0), style=plot.style_linebr)
+plotchar(goLong, char="▲", title="Entry Signal", location=location.belowbar, color=color.green)
+
+// -- Diagnostic Plots --
+plot(showDiag ? adx : na, title="ADX (diag)", color=color.new(color.blue, 0))
+plot(showDiag ? chop : na, title="CHOP (diag)", color=color.new(color.purple, 0))
+plot(showDiag ? chopTh : na, title="CHOP Th (diag)", style=plot.style_linebr, color=color.new(color.gray, 0))
