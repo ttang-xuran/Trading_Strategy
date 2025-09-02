@@ -6,7 +6,7 @@ import './index.css'
 // Force deployment with complete Bitcoin history support v3 - Fixed backtesting metrics
 
 // Calculate real performance metrics from actual trades
-const calculatePerformanceData = (trades: any[]) => {
+const calculatePerformanceData = (trades: any[], initialCapital: number = 100000) => {
   if (trades.length === 0) {
     return {
       total_return_percent: 0,
@@ -20,16 +20,14 @@ const calculatePerformanceData = (trades: any[]) => {
       gross_loss: 0,
       winning_trades: 0,
       losing_trades: 0,
-      peak_equity: 100000,
-      final_equity: 100000,
+      peak_equity: initialCapital,
+      final_equity: initialCapital,
       long_trades: 0,
       short_trades: 0,
       average_winner: 0,
       average_loser: 0
     }
   }
-  
-  const initialCapital = 100000
   const closingTrades = trades.filter(trade => trade.pnl !== null)
   
   const grossProfit = closingTrades.filter(trade => trade.pnl > 0).reduce((sum, trade) => sum + trade.pnl, 0)
@@ -100,6 +98,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
+  const [initialCapital, setInitialCapital] = useState(100000)
   const tradesPerPage = 10
 
   const handleRefreshData = () => {
@@ -123,7 +122,7 @@ function App() {
   }
 
   // Generate real strategy trades using actual historical market data
-  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M') => {
+  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}`)
     
     try {
@@ -143,9 +142,7 @@ function App() {
       const rangeMultiplier = 0.5
       const stopLossMultiplier = 2.5
       const atrPeriod = 14
-      const initialCapital = 100000
-      
-      let equity = initialCapital
+      let equity = capital
       let position = null  // 'LONG', 'SHORT', or null
       let entryPrice = 0
       let positionSize = 0
@@ -385,8 +382,8 @@ function App() {
     setTradesLoading(true)
     setBacktestCompleted(false)
     try {
-      console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe)
-      const trades = await generateAllTrades(selectedSource, selectedTimeframe)
+      console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe, 'capital:', initialCapital)
+      const trades = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital)
       console.log('Backtest completed:', trades.length, 'trades')
       setAllTrades(trades)
       setBacktestCompleted(true)
@@ -400,7 +397,7 @@ function App() {
   }
   
   // Calculate real performance metrics from trades
-  const performanceData = calculatePerformanceData(allTrades)
+  const performanceData = calculatePerformanceData(allTrades, initialCapital)
   
   // Pagination logic
   const totalPages = Math.ceil(allTrades.length / tradesPerPage)
@@ -447,13 +444,13 @@ function App() {
       // Return default starting point while loading
       return [{
         date: new Date('2020-01-01'),
-        equity: 100000
+        equity: initialCapital
       }]
     }
     
     // Use the actual trades to create equity curve
     const equityPoints = []
-    const startingEquity = 100000
+    const startingEquity = initialCapital
     
     // FIXED: Get the actual date range from trades instead of arbitrary 90 days ago
     const chronologicalTrades = [...allTrades].reverse()
@@ -680,6 +677,25 @@ function App() {
             <option value="bitstamp">Bitstamp</option>
           </select>
           
+          <select 
+            value={initialCapital}
+            onChange={(e) => setInitialCapital(parseInt(e.target.value))}
+            style={{
+              padding: '0.5rem',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: 'white',
+              color: 'black',
+              marginLeft: '0.5rem'
+            }}
+          >
+            <option value={10000}>$10K Initial Capital</option>
+            <option value={50000}>$50K Initial Capital</option>
+            <option value={100000}>$100K Initial Capital</option>
+            <option value={500000}>$500K Initial Capital</option>
+            <option value={1000000}>$1M Initial Capital</option>
+          </select>
+          
           <button
             onClick={runBacktest}
             disabled={tradesLoading}
@@ -899,12 +915,17 @@ function App() {
               height={400}
               source={selectedSource}
               onTimeframeChange={setSelectedTimeframe}
-              tradeSignals={[
-                { date: '2025-07-01', type: 'BUY', price: 115000, reason: 'Volatility Breakout' },
-                { date: '2025-07-15', type: 'SELL', price: 118000, reason: 'Stop Loss' },
-                { date: '2025-08-01', type: 'BUY', price: 117000, reason: 'Reversal Signal' },
-                { date: '2025-08-10', type: 'SELL', price: 119000, reason: 'Take Profit' }
-              ]} 
+              tradeSignals={allTrades.filter(trade => trade.action.includes('ENTRY')).map(trade => {
+                // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
+                const parsedDate = new Date(trade.date);
+                const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
+                return {
+                  date: isoDate,
+                  type: trade.action.includes('LONG') ? 'BUY' : 'SELL',
+                  price: trade.price,
+                  reason: trade.comment || 'Strategy Signal'
+                };
+              })} 
             />
             
             {/* Live Price Overlay */}

@@ -410,11 +410,16 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       const rangeMultiplier = 0.5
       
       // Calculate upper and lower boundaries for each visible candle
-      const boundaries = visibleData.map((candle, index) => {
-        if (index < lookbackPeriod) return null
+      // FIXED: Use full candleData for proper lookback calculation, not just visibleData
+      const boundaries = visibleData.map((candle, visibleIndex) => {
+        // Find the actual index in the full dataset
+        const actualIndex = startIndex + visibleIndex
+        if (actualIndex < lookbackPeriod) return null
         
-        // Get lookback data (previous 20 bars)
-        const lookbackData = visibleData.slice(Math.max(0, index - lookbackPeriod), index)
+        // Get lookback data from the FULL dataset (previous 20 bars)
+        const lookbackData = candleData.slice(Math.max(0, actualIndex - lookbackPeriod), actualIndex)
+        if (lookbackData.length === 0) return null
+        
         const highestHigh = Math.max(...lookbackData.map(d => d.high))
         const lowestLow = Math.min(...lookbackData.map(d => d.low))
         const breakoutRange = highestHigh - lowestLow
@@ -422,7 +427,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         return {
           upperBoundary: candle.open + breakoutRange * rangeMultiplier,
           lowerBoundary: candle.open - breakoutRange * rangeMultiplier,
-          x: padding + (chartWidth / (visibleData.length - 1)) * index
+          x: padding + (chartWidth / (visibleData.length - 1)) * visibleIndex
         }
       })
       
