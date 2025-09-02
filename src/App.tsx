@@ -91,9 +91,72 @@ const initialPrice = {
   timestamp: new Date().toISOString()
 }
 
+// Trading strategy definitions
+type StrategyType = 'breakout-long-short' | 'trend-following' | 'mean-reversion' | 'momentum'
+
+interface TradingStrategy {
+  id: StrategyType
+  name: string
+  description: string
+  parameters: {
+    lookbackPeriod: number
+    rangeMultiplier: number
+    stopLossMultiplier: number
+    atrPeriod: number
+  }
+}
+
+const tradingStrategies: Record<StrategyType, TradingStrategy> = {
+  'breakout-long-short': {
+    id: 'breakout-long-short',
+    name: 'Breakout for long and short',
+    description: 'Adaptive Volatility Breakout strategy with reversal capability, optimized for Bitcoin trading across multiple data sources.',
+    parameters: {
+      lookbackPeriod: 20,
+      rangeMultiplier: 0.5,
+      stopLossMultiplier: 2.5,
+      atrPeriod: 14
+    }
+  },
+  'trend-following': {
+    id: 'trend-following',
+    name: 'Trend Following',
+    description: 'Follows strong trends with moving average crossovers and momentum indicators (Coming Soon)',
+    parameters: {
+      lookbackPeriod: 50,
+      rangeMultiplier: 1.0,
+      stopLossMultiplier: 3.0,
+      atrPeriod: 14
+    }
+  },
+  'mean-reversion': {
+    id: 'mean-reversion',
+    name: 'Mean Reversion',
+    description: 'Trades against extreme price movements expecting a return to average (Coming Soon)',
+    parameters: {
+      lookbackPeriod: 14,
+      rangeMultiplier: 2.0,
+      stopLossMultiplier: 1.5,
+      atrPeriod: 14
+    }
+  },
+  'momentum': {
+    id: 'momentum',
+    name: 'Momentum',
+    description: 'Captures short-term price momentum with RSI and MACD signals (Coming Soon)',
+    parameters: {
+      lookbackPeriod: 10,
+      rangeMultiplier: 0.8,
+      stopLossMultiplier: 2.0,
+      atrPeriod: 14
+    }
+  }
+}
+
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [selectedSource, setSelectedSource] = useState('bitstamp')
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>('breakout-long-short')
   const [livePrice, setLivePrice] = useState(initialPrice)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -125,10 +188,21 @@ function App() {
   }
 
   // Generate real strategy trades using actual historical market data
-  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000) => {
-    console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}`)
+  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short') => {
+    console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
     try {
+      // Get current strategy configuration
+      const currentStrategy = tradingStrategies[strategyType]
+      if (!currentStrategy) {
+        throw new Error(`Unknown strategy: ${strategyType}`)
+      }
+      
+      // Only allow breakout-long-short for now, others are coming soon
+      if (strategyType !== 'breakout-long-short') {
+        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently only "Breakout for long and short" is available.`)
+      }
+      
       // Get REAL historical OHLC data from the selected exchange for the selected timeframe
       const days = getTimeframeDays(timeframe)
       console.log(`Fetching ${days} days of real historical data from ${source}...`)
@@ -140,11 +214,8 @@ function App() {
         throw new Error(`No historical data received from ${source}`)
       }
       
-      // Apply Adaptive Volatility Breakout Strategy
-      const lookbackPeriod = 20
-      const rangeMultiplier = 0.5
-      const stopLossMultiplier = 2.5
-      const atrPeriod = 14
+      // Apply selected strategy with its parameters
+      const { lookbackPeriod, rangeMultiplier, stopLossMultiplier, atrPeriod } = currentStrategy.parameters
       let equity = capital
       let position = null  // 'LONG', 'SHORT', or null
       let entryPrice = 0
@@ -385,8 +456,8 @@ function App() {
     setTradesLoading(true)
     setBacktestCompleted(false)
     try {
-      console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe, 'capital:', initialCapital)
-      const trades = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital)
+      console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe, 'capital:', initialCapital, 'strategy:', selectedStrategy)
+      const trades = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy)
       console.log('Backtest completed:', trades.length, 'trades')
       setAllTrades(trades)
       setBacktestCompleted(true)
@@ -649,7 +720,7 @@ function App() {
             color: '#7d8590',
             opacity: 0.9 
           }}>
-            Adaptive Volatility Breakout
+            {tradingStrategies[selectedStrategy].name}
           </p>
         </header>
 
@@ -678,6 +749,32 @@ function App() {
             <option value="coinbase">Coinbase Pro (Active)</option>
             <option value="binance">Binance</option>
             <option value="bitstamp">Bitstamp</option>
+          </select>
+          
+          <select 
+            value={selectedStrategy}
+            onChange={(e) => setSelectedStrategy(e.target.value as StrategyType)}
+            style={{
+              padding: '0.5rem',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: 'white',
+              color: 'black',
+              marginLeft: '0.5rem'
+            }}
+          >
+            {Object.values(tradingStrategies).map(strategy => (
+              <option 
+                key={strategy.id} 
+                value={strategy.id}
+                disabled={strategy.id !== 'breakout-long-short'}
+                style={{
+                  color: strategy.id !== 'breakout-long-short' ? '#999' : 'black'
+                }}
+              >
+                {strategy.name} {strategy.id !== 'breakout-long-short' ? '(Coming Soon)' : ''}
+              </option>
+            ))}
           </select>
           
           <select 
@@ -1012,8 +1109,7 @@ function App() {
               <div>
                 <h3 style={{ marginBottom: '1rem', color: '#f0f6fc' }}>Strategy Overview</h3>
                 <p style={{ marginBottom: '1rem', color: '#7d8590' }}>
-                  Adaptive Volatility Breakout strategy with reversal capability, 
-                  optimized for Bitcoin trading across multiple data sources.
+                  {tradingStrategies[selectedStrategy].description}
                 </p>
                 <div style={{ 
                   display: 'grid', 
@@ -1023,9 +1119,10 @@ function App() {
                   <div>
                     <h4 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Strategy Parameters</h4>
                     <div style={{ fontSize: '0.9rem', color: '#7d8590' }}>
-                      <div>Lookback Period: 20</div>
-                      <div>Range Multiplier: 0.5</div>
-                      <div>Stop Loss Multiplier: 2.5</div>
+                      <div>Lookback Period: {tradingStrategies[selectedStrategy].parameters.lookbackPeriod}</div>
+                      <div>Range Multiplier: {tradingStrategies[selectedStrategy].parameters.rangeMultiplier}</div>
+                      <div>Stop Loss Multiplier: {tradingStrategies[selectedStrategy].parameters.stopLossMultiplier}</div>
+                      <div>ATR Period: {tradingStrategies[selectedStrategy].parameters.atrPeriod}</div>
                     </div>
                   </div>
                   <div>
@@ -1160,7 +1257,7 @@ function App() {
                       <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚡</div>
                       <div>Running backtest with real {selectedSource.toUpperCase()} market data...</div>
                       <div style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                        Fetching historical prices and applying Adaptive Volatility Breakout strategy
+                        Fetching historical prices and applying {tradingStrategies[selectedStrategy].name} strategy
                       </div>
                     </div>
                   ) : !backtestCompleted ? (
