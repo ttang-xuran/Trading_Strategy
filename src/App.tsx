@@ -728,73 +728,101 @@ function App() {
         <div style={{
           display: 'flex',
           gap: '1rem',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           padding: '1rem',
           backgroundColor: '#161b22',
           border: '1px solid #30363d',
           borderRadius: '8px',
           marginBottom: '1rem'
         }}>
-          <select 
-            value={selectedSource}
-            onChange={(e) => setSelectedSource(e.target.value)}
-            style={{
-              padding: '0.5rem',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: 'white',
-              color: 'black'
-            }}
-          >
-            <option value="coinbase">Coinbase Pro (Active)</option>
-            <option value="binance">Binance</option>
-            <option value="bitstamp">Bitstamp</option>
-          </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ 
+              fontSize: '0.9rem', 
+              color: '#f0f6fc', 
+              fontWeight: '500',
+              marginBottom: '0.25rem'
+            }}>
+              Exchange Selection
+            </label>
+            <select 
+              value={selectedSource}
+              onChange={(e) => setSelectedSource(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                borderRadius: '4px',
+                border: 'none',
+                backgroundColor: 'white',
+                color: 'black'
+              }}
+            >
+              <option value="coinbase">Coinbase Pro (Active)</option>
+              <option value="binance">Binance</option>
+              <option value="bitstamp">Bitstamp</option>
+            </select>
+          </div>
           
-          <select 
-            value={selectedStrategy}
-            onChange={(e) => setSelectedStrategy(e.target.value as StrategyType)}
-            style={{
-              padding: '0.5rem',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: 'white',
-              color: 'black',
-              marginLeft: '0.5rem'
-            }}
-          >
-            {Object.values(tradingStrategies).map(strategy => (
-              <option 
-                key={strategy.id} 
-                value={strategy.id}
-                disabled={strategy.id !== 'breakout-long-short'}
-                style={{
-                  color: strategy.id !== 'breakout-long-short' ? '#999' : 'black'
-                }}
-              >
-                {strategy.name} {strategy.id !== 'breakout-long-short' ? '(Coming Soon)' : ''}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ 
+              fontSize: '0.9rem', 
+              color: '#f0f6fc', 
+              fontWeight: '500',
+              marginBottom: '0.25rem'
+            }}>
+              Strategy Selection
+            </label>
+            <select 
+              value={selectedStrategy}
+              onChange={(e) => setSelectedStrategy(e.target.value as StrategyType)}
+              style={{
+                padding: '0.5rem',
+                borderRadius: '4px',
+                border: 'none',
+                backgroundColor: 'white',
+                color: 'black'
+              }}
+            >
+              {Object.values(tradingStrategies).map(strategy => (
+                <option 
+                  key={strategy.id} 
+                  value={strategy.id}
+                  disabled={strategy.id !== 'breakout-long-short'}
+                  style={{
+                    color: strategy.id !== 'breakout-long-short' ? '#999' : 'black'
+                  }}
+                >
+                  {strategy.name} {strategy.id !== 'breakout-long-short' ? '(Coming Soon)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           
-          <select 
-            value={initialCapital}
-            onChange={(e) => setInitialCapital(parseInt(e.target.value))}
-            style={{
-              padding: '0.5rem',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: 'white',
-              color: 'black',
-              marginLeft: '0.5rem'
-            }}
-          >
-            <option value={10000}>$10K Initial Capital</option>
-            <option value={50000}>$50K Initial Capital</option>
-            <option value={100000}>$100K Initial Capital</option>
-            <option value={500000}>$500K Initial Capital</option>
-            <option value={1000000}>$1M Initial Capital</option>
-          </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ 
+              fontSize: '0.9rem', 
+              color: '#f0f6fc', 
+              fontWeight: '500',
+              marginBottom: '0.25rem'
+            }}>
+              Initial Capital
+            </label>
+            <select 
+              value={initialCapital}
+              onChange={(e) => setInitialCapital(parseInt(e.target.value))}
+              style={{
+                padding: '0.5rem',
+                borderRadius: '4px',
+                border: 'none',
+                backgroundColor: 'white',
+                color: 'black'
+              }}
+            >
+              <option value={10000}>$10K</option>
+              <option value={50000}>$50K</option>
+              <option value={100000}>$100K</option>
+              <option value={500000}>$500K</option>
+              <option value={1000000}>$1M</option>
+            </select>
+          </div>
           
           <button
             onClick={runBacktest}
