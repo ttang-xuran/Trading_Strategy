@@ -590,6 +590,11 @@ class LivePriceService {
   private async fetchExtendedHistoricalData(source: string, totalDays: number): Promise<any[]> {
     console.log(`fetchExtendedHistoricalData: Fetching ${totalDays} days from ${source} using multiple batches`)
     
+    // Try primary source first, then fallback sources if it fails
+    const primarySource = source.toLowerCase()
+    const fallbackSources = ['binance', 'bitstamp', 'coingecko'].filter(s => s !== primarySource)
+    const allSources = [primarySource, ...fallbackSources]
+    
     // Get API limits for each source
     const apiLimits = {
       'bitstamp': 1000,   // 1000 days max per call
@@ -598,6 +603,27 @@ class LivePriceService {
       'coinbase': 3000    // Coinbase can handle longer ranges with date parameters
     }
     
+    for (const currentSource of allSources) {
+      try {
+        console.log(`🔄 Trying extended fetch with ${currentSource} (${currentSource === primarySource ? 'primary' : 'fallback'})`)
+        const result = await this.performExtendedFetch(currentSource, totalDays, apiLimits)
+        if (result && result.length > 0) {
+          console.log(`✅ Extended fetch successful with ${currentSource}: ${result.length} candles`)
+          return result
+        }
+      } catch (error) {
+        console.warn(`❌ Extended fetch failed with ${currentSource}:`, error)
+        if (currentSource === primarySource) {
+          console.log(`📋 Primary source ${primarySource} failed for long timeframe, trying fallback sources...`)
+        }
+        continue
+      }
+    }
+    
+    throw new Error(`All sources failed for extended historical data (${totalDays} days)`)
+  }
+
+  private async performExtendedFetch(source: string, totalDays: number, apiLimits: Record<string, number>): Promise<any[]> {
     const batchSize = apiLimits[source.toLowerCase() as keyof typeof apiLimits] || 365
     const numBatches = Math.ceil(totalDays / batchSize)
     
@@ -717,31 +743,39 @@ class LivePriceService {
       console.log(`Fetching ${days} days of Coinbase data`)
     }
     
-    // Coinbase API often has CORS issues in browser, try direct first then fallback
     const apiUrl = `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startTime.toISOString()}&end=${endTime.toISOString()}&granularity=86400`
     
-    let response
-    try {
-      response = await fetch(apiUrl)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    } catch (error) {
-      console.warn('Coinbase API failed, likely CORS issue in browser:', error)
-      // Fallback to CoinGecko which has better CORS support
-      throw new Error('Coinbase API blocked by CORS - falling back to CoinGecko')
+    // Try multiple CORS proxies for historical data
+    for (let proxyIndex = 0; proxyIndex < this.CORS_PROXIES.length; proxyIndex++) {
+      try {
+        const proxy = this.CORS_PROXIES[proxyIndex]
+        const proxyUrl = proxy ? `${proxy}${encodeURIComponent(apiUrl)}` : apiUrl
+        
+        console.log(`Trying Coinbase historical API with proxy ${proxyIndex}: ${proxy || 'direct'}`)
+        const response = await fetch(proxyUrl)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        
+        const data = await response.json()
+        
+        if (data && Array.isArray(data) && data.length > 0) {
+          // Convert Coinbase format [timestamp, low, high, open, close, volume] to our format
+          return data.map((candle: number[]) => ({
+            date: new Date(candle[0] * 1000),
+            open: candle[3],
+            high: candle[2], 
+            low: candle[1],
+            close: candle[4],
+            timestamp: candle[0] * 1000
+          })).sort((a: any, b: any) => a.timestamp - b.timestamp)
+        }
+      } catch (error) {
+        console.warn(`Coinbase proxy ${proxyIndex} failed:`, error)
+        // Continue to next proxy
+      }
     }
     
-    if (!response.ok) throw new Error('Coinbase historical API failed')
-    const data = await response.json()
-    
-    // Convert Coinbase format [timestamp, low, high, open, close, volume] to our format
-    return data.map((candle: number[]) => ({
-      date: new Date(candle[0] * 1000),
-      open: candle[3],
-      high: candle[2], 
-      low: candle[1],
-      close: candle[4],
-      timestamp: candle[0] * 1000
-    })).sort((a: any, b: any) => a.timestamp - b.timestamp)
+    // If all proxies fail, throw error to trigger fallback to other data sources
+    throw new Error('All CORS proxies failed for Coinbase historical data')
   }
 
   private async fetchBitstampHistorical(days: number): Promise<any[]> {
@@ -882,24 +916,36 @@ class LivePriceService {
     
     const apiUrl = `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startDate.toISOString()}&end=${endDate.toISOString()}&granularity=86400`
     
-    try {
-      const response = await fetch(apiUrl)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      
-      const data = await response.json()
-      
-      return data.map((candle: number[]) => ({
-        date: new Date(candle[0] * 1000),
-        open: candle[3],
-        high: candle[2], 
-        low: candle[1],
-        close: candle[4],
-        timestamp: candle[0] * 1000
-      }))
-    } catch (error) {
-      console.warn('Coinbase range API failed (likely CORS):', error)
-      throw error
+    // Try multiple CORS proxies for historical data
+    for (let proxyIndex = 0; proxyIndex < this.CORS_PROXIES.length; proxyIndex++) {
+      try {
+        const proxy = this.CORS_PROXIES[proxyIndex]
+        const proxyUrl = proxy ? `${proxy}${encodeURIComponent(apiUrl)}` : apiUrl
+        
+        console.log(`Trying Coinbase historical API with proxy ${proxyIndex}: ${proxy || 'direct'}`)
+        const response = await fetch(proxyUrl)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        
+        const data = await response.json()
+        
+        if (data && Array.isArray(data) && data.length > 0) {
+          return data.map((candle: number[]) => ({
+            date: new Date(candle[0] * 1000),
+            open: candle[3],
+            high: candle[2], 
+            low: candle[1],
+            close: candle[4],
+            timestamp: candle[0] * 1000
+          }))
+        }
+      } catch (error) {
+        console.warn(`Coinbase proxy ${proxyIndex} failed:`, error)
+        // Continue to next proxy
+      }
     }
+    
+    // If all proxies fail, throw error
+    throw new Error('All CORS proxies failed for Coinbase historical data')
   }
   
   private async fetchBitstampHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
