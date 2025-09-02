@@ -437,17 +437,24 @@ function App() {
       }
       
       console.log(`Generated ${trades.length} trades`)
-      return trades.reverse() // Most recent first
+      return {
+        trades: trades.reverse(), // Most recent first
+        historicalDataCount: ohlcData.length
+      }
       
     } catch (error) {
       console.error('Failed to generate strategy trades:', error)
-      return []
+      return {
+        trades: [],
+        historicalDataCount: 0
+      }
     }
   }
 
   const [allTrades, setAllTrades] = useState<any[]>([])
   const [tradesLoading, setTradesLoading] = useState(false)
   const [backtestCompleted, setBacktestCompleted] = useState(false)
+  const [historicalDataCount, setHistoricalDataCount] = useState<number>(0)
   // State to track selected timeframe from chart component
   const [selectedTimeframe, setSelectedTimeframe] = useState('6M')
   
@@ -457,13 +464,15 @@ function App() {
     setBacktestCompleted(false)
     try {
       console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe, 'capital:', initialCapital, 'strategy:', selectedStrategy)
-      const trades = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy)
-      console.log('Backtest completed:', trades.length, 'trades')
-      setAllTrades(trades)
+      const result = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy)
+      console.log('Backtest completed:', result.trades.length, 'trades')
+      setAllTrades(result.trades)
+      setHistoricalDataCount(result.historicalDataCount)
       setBacktestCompleted(true)
     } catch (error) {
       console.error('Failed to run backtest:', error)
       setAllTrades([])
+      setHistoricalDataCount(0)
       alert(`Failed to run backtest: ${error.message}`)
     } finally {
       setTradesLoading(false)
@@ -1156,9 +1165,9 @@ function App() {
                   <div>
                     <h4 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Data Source</h4>
                     <div style={{ fontSize: '0.9rem', color: '#7d8590' }}>
-                      <div>Coinbase Pro</div>
-                      <div>Total Candles: 3,884</div>
-                      <div>Timeframe: 1D</div>
+                      <div>{selectedSource.charAt(0).toUpperCase() + selectedSource.slice(1)}</div>
+                      <div>Total Candles: {backtestCompleted ? historicalDataCount.toLocaleString() : 'Run backtest to see data'}</div>
+                      <div>Timeframe: {selectedTimeframe}</div>
                     </div>
                   </div>
                 </div>
