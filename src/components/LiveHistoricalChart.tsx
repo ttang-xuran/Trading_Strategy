@@ -42,6 +42,19 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   // Hover state for OHLC tooltip
   const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
+  
+  // Fallback notification state
+  const [fallbackNotification, setFallbackNotification] = useState<{
+    show: boolean
+    requestedSource: string
+    actualSource: string
+    reason: string
+  }>({
+    show: false,
+    requestedSource: '',
+    actualSource: '',
+    reason: ''
+  })
 
   // Get number of days for each timeframe
   const getTimeframeDays = (timeframe: TimeRange): number => {
@@ -76,6 +89,25 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       
       if (!historicalData || historicalData.length === 0) {
         throw new Error('No historical data received from livePriceService')
+      }
+      
+      // Check if we got fallback data and show notification
+      const fallbackInfo = (historicalData as any)._fallbackInfo
+      if (fallbackInfo) {
+        setFallbackNotification({
+          show: true,
+          requestedSource: fallbackInfo.requestedSource.toUpperCase(),
+          actualSource: fallbackInfo.actualSource.toUpperCase(),
+          reason: fallbackInfo.reason
+        })
+        
+        // Auto-hide notification after 8 seconds
+        setTimeout(() => {
+          setFallbackNotification(prev => ({ ...prev, show: false }))
+        }, 8000)
+      } else {
+        // Clear any existing notification if we successfully used the requested source
+        setFallbackNotification(prev => ({ ...prev, show: false }))
       }
       
       // Convert the livePriceService data format to our CandleData format
@@ -885,6 +917,35 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
             • Check internet connection<br/>
             • Try selecting a different data source<br/>
             • We never show simulated data - only real market prices
+          </div>
+        </div>
+      )}
+
+      {/* Fallback Notification */}
+      {fallbackNotification.show && (
+        <div style={{
+          position: 'absolute',
+          top: '50px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(253, 126, 20, 0.15)',
+          border: '1px solid #fd7e14',
+          borderRadius: '6px',
+          padding: '12px 16px',
+          fontSize: '12px',
+          color: '#f0f6fc',
+          maxWidth: '500px',
+          zIndex: 15,
+          boxShadow: '0 4px 12px rgba(253, 126, 20, 0.2)'
+        }}>
+          <div style={{ fontWeight: 'bold', color: '#fd7e14', marginBottom: '4px' }}>
+            📊 Data Source Fallback
+          </div>
+          <div style={{ color: '#e6edf3', lineHeight: '1.4' }}>
+            Requested <strong>{fallbackNotification.requestedSource}</strong> but using <strong style={{ color: '#fd7e14' }}>{fallbackNotification.actualSource}</strong>
+          </div>
+          <div style={{ fontSize: '11px', color: '#8b949e', marginTop: '4px' }}>
+            Reason: {fallbackNotification.reason}
           </div>
         </div>
       )}

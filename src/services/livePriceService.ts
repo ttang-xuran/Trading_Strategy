@@ -573,6 +573,17 @@ class LivePriceService {
           const fallbackResult = await this.fetchHistoricalFromSource(fallbackSource, days)
           console.log(`Fallback successful: ${fallbackResult.length} candles from ${fallbackSource}`)
           this.updateApiHealth(fallbackSource, true)
+          
+          // Add fallback metadata to indicate we used a different source
+          Object.defineProperty(fallbackResult, '_fallbackInfo', {
+            value: {
+              requestedSource: source,
+              actualSource: fallbackSource,
+              reason: 'Primary source failed for historical data'
+            },
+            enumerable: false
+          })
+          
           return fallbackResult
         } catch (fallbackError) {
           console.error(`Fallback to ${fallbackSource} also failed:`, fallbackError)
@@ -609,6 +620,20 @@ class LivePriceService {
         const result = await this.performExtendedFetch(currentSource, totalDays, apiLimits)
         if (result && result.length > 0) {
           console.log(`✅ Extended fetch successful with ${currentSource}: ${result.length} candles`)
+          
+          // If we used a fallback source, add metadata to indicate this
+          if (currentSource !== primarySource) {
+            // Add fallback metadata to the result
+            Object.defineProperty(result, '_fallbackInfo', {
+              value: {
+                requestedSource: primarySource,
+                actualSource: currentSource,
+                reason: 'Primary source failed for extended historical data'
+              },
+              enumerable: false
+            })
+          }
+          
           return result
         }
       } catch (error) {
