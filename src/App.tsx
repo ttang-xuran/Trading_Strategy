@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import LiveHistoricalChart from './components/LiveHistoricalChart'
 import DataQualityMonitor from './components/DataQualityMonitor'
+import { AuthProvider } from './contexts/AuthContext'
+import AuthWrapper from './components/AuthWrapper'
+import LogoutButton from './components/LogoutButton'
 import { livePriceService } from './services/livePriceService'
 import './index.css'
 // Force deployment with complete Bitcoin history support v3 - Fixed backtesting metrics
@@ -970,21 +973,34 @@ function App() {
       <div style={{ padding: '1rem', maxWidth: '1400px', margin: '0 auto' }}>
         
         {/* Header */}
-        <header style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ 
-            fontSize: '2rem', 
-            margin: '0 0 0.5rem 0',
-            color: '#f0f6fc'
-          }}>
-            🚀 BTC Strategy
-          </h1>
-          <p style={{ 
-            margin: 0, 
-            color: '#7d8590',
-            opacity: 0.9 
-          }}>
-            {tradingStrategies[selectedStrategy].name}
-          </p>
+        <header style={{ 
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '2rem'
+        }}>
+          {/* Logo and Title */}
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <h1 style={{ 
+              fontSize: '2rem', 
+              margin: '0 0 0.5rem 0',
+              color: '#f0f6fc'
+            }}>
+              🚀 BTC Strategy
+            </h1>
+            <p style={{ 
+              margin: 0, 
+              color: '#7d8590',
+              opacity: 0.9 
+            }}>
+              {tradingStrategies[selectedStrategy].name}
+            </p>
+          </div>
+          
+          {/* Logout Button */}
+          <div>
+            <LogoutButton />
+          </div>
         </header>
 
         {/* Controls */}
@@ -2025,4 +2041,15 @@ function App() {
   )
 }
 
-export default App
+// Wrapped App with Authentication
+const AppWithAuth = () => {
+  return (
+    <AuthProvider>
+      <AuthWrapper>
+        <App />
+      </AuthWrapper>
+    </AuthProvider>
+  )
+}
+
+export default AppWithAuth
