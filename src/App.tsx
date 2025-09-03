@@ -431,6 +431,8 @@ function App() {
     let entryPrice = 0
     let positionSize = 0
     let peakClose = null // For ATR trailing stop
+    let pendingEntry = false // For next-bar execution
+    let pendingExit = null // For next-bar exit execution
     const trades = []
     
     // Technical indicator calculation helpers
@@ -577,13 +579,58 @@ function App() {
       return highest
     }
     
-    // Process each day
+    // Process each day - Pine Script Next-Bar Execution Model
     for (let i = Math.max(smaSlowLen, adxLen * 2, chopLen); i < ohlcData.length; i++) {
       const currentBar = ohlcData[i]
+      const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null
       
       // Skip invalid data
       if (!currentBar || !currentBar.close || currentBar.close <= 0) {
         continue
+      }
+      
+      // STEP 1: Execute pending entry from previous bar (Pine Script next-bar execution)
+      if (pendingEntry && nextBar && position !== 'LONG') {
+        // Enter long at next bar open
+        position = 'LONG'
+        entryPrice = nextBar.open
+        positionSize = (equity * 0.99) / entryPrice
+        peakClose = nextBar.open
+        
+        trades.push({
+          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: 'ENTRY LONG',
+          price: entryPrice,
+          size: positionSize,
+          pnl: null,
+          equity: equity,
+          comment: `Trend Entry (Next Bar Open)`
+        })
+        
+        pendingEntry = false
+      }
+      
+      // STEP 2: Execute pending exit from previous bar
+      if (pendingExit && nextBar && position === 'LONG') {
+        const exitPrice = pendingExit.type === 'trend' ? nextBar.open : Math.min(nextBar.open, pendingExit.price)
+        const pnl = positionSize * (exitPrice - entryPrice)
+        equity += pnl
+        
+        trades.push({
+          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: pendingExit.type === 'trend' ? 'TREND EXIT' : 'ATR TRAIL STOP',
+          price: exitPrice,
+          size: positionSize,
+          pnl: pnl,
+          equity: equity,
+          comment: pendingExit.type === 'trend' ? 'Close < SMA Fast (Next Bar)' : `ATR Trail Stop (${atrMult}x ATR)`
+        })
+        
+        position = null
+        entryPrice = 0
+        positionSize = 0
+        peakClose = null
+        pendingExit = null
       }
       
       // Calculate indicators
@@ -598,80 +645,34 @@ function App() {
         continue
       }
       
-      // Trend Following conditions
+      // STEP 3: Check for new entry signals (execute next bar)
       const regimeUp = currentBar.close > smaSlow && smaFast > smaSlow
       const strength = adx > adxTh && chop < chopTh
       const breakout = currentBar.close > donUp
       const goLong = regimeUp && strength && breakout
       
-      // Entry logic
-      if (goLong && position !== 'LONG') {
-        // Close any existing position first (though this is long-only)
-        if (position === 'LONG') {
-          const exitPrice = currentBar.close
-          const pnl = positionSize * (exitPrice - entryPrice)
-          equity += pnl
-          
-          trades.push({
-            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            action: 'CLOSE LONG',
-            price: exitPrice,
-            size: positionSize,
-            pnl: pnl,
-            equity: equity,
-            comment: 'Exit before new entry'
-          })
-        }
-        
-        // Enter long
-        position = 'LONG'
-        entryPrice = currentBar.close
-        positionSize = (equity * 0.99) / entryPrice // 99% allocation with 1% cash buffer
-        peakClose = currentBar.close
-        
-        trades.push({
-          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          action: 'ENTRY LONG',
-          price: entryPrice,
-          size: positionSize,
-          pnl: null,
-          equity: equity,
-          comment: `Trend Entry (ADX: ${adx.toFixed(1)}, CHOP: ${chop.toFixed(1)})`
-        })
+      // Set pending entry signal for next bar execution
+      if (goLong && position !== 'LONG' && !pendingEntry) {
+        pendingEntry = true // Will execute at next bar open
       }
       
-      // Exit logic for long positions - Pine Script behavior
-      if (position === 'LONG') {
-        // Update peak close BEFORE checking exit conditions (Pine Script timing)
-        const previousPeak = peakClose
+      // STEP 4: Check for exit signals (execute next bar)
+      if (position === 'LONG' && !pendingExit) {
+        // Update peak close for trailing stop calculation
         peakClose = Math.max(peakClose, currentBar.close)
         
-        // Calculate trailing stop using previous bar's peak
-        const trailStop = previousPeak - atrMult * atr
+        // Calculate trailing stop
+        const trailStop = peakClose - atrMult * atr
         
-        // Check trend exit (close < SMA fast)
+        // Check exit conditions
         const trendExit = currentBar.close < smaFast
+        const trailStopHit = currentBar.close <= trailStop
         
-        // Pine Script exit conditions: strategy.exit() triggers on bar close
-        if (currentBar.close <= trailStop || trendExit) {
-          const exitPrice = trendExit ? currentBar.close : Math.min(currentBar.close, trailStop)
-          const pnl = positionSize * (exitPrice - entryPrice)
-          equity += pnl
-          
-          trades.push({
-            date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            action: trendExit ? 'TREND EXIT' : 'ATR TRAIL STOP',
-            price: exitPrice,
-            size: positionSize,
-            pnl: pnl,
-            equity: equity,
-            comment: trendExit ? 'Close < SMA Fast' : `ATR Trail Stop (${atrMult}x ATR)`
-          })
-          
-          position = null
-          entryPrice = 0
-          positionSize = 0
-          peakClose = null
+        // Set pending exit for next bar execution
+        if (trendExit) {
+          pendingExit = { type: 'trend', price: null }
+        } else if (trailStopHit) {
+          pendingExit = { type: 'trail', price: trailStop }
         }
       }
     }
