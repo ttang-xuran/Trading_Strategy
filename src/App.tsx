@@ -158,7 +158,7 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
 
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [selectedSource, setSelectedSource] = useState('bitstamp')
+  const [selectedSource, setSelectedSource] = useState('binance')
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>('breakout-long-short')
   const [livePrice, setLivePrice] = useState(initialPrice)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
