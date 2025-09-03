@@ -559,9 +559,10 @@ function App() {
     
     const getDonchianHigh = (data: any[], period: number, index: number) => {
       if (index < period) return null
-      // Pine Script: ta.highest(high, period)[1] - looks at [i-period] to [i-1] (period bars, excluding current)
+      // Pine Script: ta.highest(high, period)[1] - looks at exactly 'period' bars from [i-period] to [i-1]
+      // This gives us period bars: [i-period], [i-period+1], ..., [i-1]
       let highest = data[index - period].high
-      for (let i = index - period + 1; i <= index - 1; i++) { // i <= index - 1 includes the [i-1] bar
+      for (let i = index - period + 1; i <= index - 1; i++) {
         highest = Math.max(highest, data[i].high)
       }
       return highest
@@ -620,22 +621,26 @@ function App() {
         pendingExit = null
       }
       
-      // Calculate indicators
+      // Calculate indicators (Pine Script uses [1] references to avoid repainting)
       const smaFast = calculateSMA(ohlcData, smaFastLen, i)
       const smaSlow = calculateSMA(ohlcData, smaSlowLen, i)
       const donUp = getDonchianHigh(ohlcData, donLen, i)
-      const adx = calculateADX(ohlcData, adxLen, i)
-      const chop = calculateChoppiness(ohlcData, chopLen, i)
       const atr = calculateATR(ohlcData, atrLen, i)
       
-      if (!smaFast || !smaSlow || !donUp || !adx || !chop || !atr) {
+      // Use PREVIOUS bar values for Pine Script [1] reference accuracy
+      const smaFastPrev = i > 0 ? calculateSMA(ohlcData, smaFastLen, i - 1) : null
+      const smaSlowPrev = i > 0 ? calculateSMA(ohlcData, smaSlowLen, i - 1) : null
+      const adxPrev = i > 0 ? calculateADX(ohlcData, adxLen, i - 1) : null
+      const chopPrev = i > 0 ? calculateChoppiness(ohlcData, chopLen, i - 1) : null
+      
+      if (!smaFast || !smaSlow || !donUp || !atr || !smaFastPrev || !smaSlowPrev || !adxPrev || !chopPrev) {
         continue
       }
       
-      // STEP 3: Check for new entry signals (Pine Script: signals generated on current bar, executed next bar)
-      const regimeUp = currentBar.close > smaSlow && smaFast > smaSlow
-      const strength = adx > adxTh && chop < chopTh
-      const breakout = currentBar.close > donUp  // Use close breakout like Pine Script
+      // STEP 3: Check for new entry signals (Pine Script: signals use [1] references for regime/strength)
+      const regimeUp = currentBar.close > smaSlowPrev && smaFastPrev > smaSlowPrev  // Use prev bar SMA values
+      const strength = adxPrev > adxTh && chopPrev < chopTh  // Use prev bar strength values
+      const breakout = currentBar.close > donUp  // Current bar close vs Donchian channel
       const goLong = regimeUp && strength && breakout
       
       // CRITICAL FIX: Only generate signal if not already in position and no pending signals
@@ -652,14 +657,14 @@ function App() {
         // Calculate trailing stop based on peak close
         const trailStop = peakClose - atrMult * atr
         
-        // Check exit conditions using current bar close (Pine Script behavior)
-        const trendExit = currentBar.close < smaFast  // Close below fast SMA
+        // Check exit conditions using previous bar SMA for Pine Script [1] reference accuracy
+        const trendExit = currentBar.close < smaFastPrev  // Close below previous bar's fast SMA
         const trailStopHit = currentBar.close <= trailStop  // Close below trailing stop
         
         // Generate exit signal for next bar execution
         if (trendExit) {
           pendingExit = { type: 'trend', price: null }
-          console.log(`Trend exit signal generated on ${currentBar.date.toLocaleDateString()}: close=${currentBar.close.toFixed(2)} < smaFast=${smaFast.toFixed(2)}`)
+          console.log(`Trend exit signal generated on ${currentBar.date.toLocaleDateString()}: close=${currentBar.close.toFixed(2)} < smaFastPrev=${smaFastPrev.toFixed(2)}`)
         } else if (trailStopHit) {
           pendingExit = { type: 'trail', price: trailStop }
           console.log(`Trail stop signal generated on ${currentBar.date.toLocaleDateString()}: close=${currentBar.close.toFixed(2)} <= trailStop=${trailStop.toFixed(2)}`)
