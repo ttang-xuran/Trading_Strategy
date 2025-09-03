@@ -445,18 +445,27 @@ function App() {
     
     const calculateATR = (data: any[], period: number, index: number) => {
       if (index < period) return null
-      let sum = 0
-      for (let i = Math.max(0, index - period + 1); i <= index; i++) {
+      
+      // Calculate True Range values
+      const trValues = []
+      for (let i = Math.max(1, index - period * 2); i <= index; i++) {
         const current = data[i]
-        const previous = i > 0 ? data[i - 1] : current
+        const previous = data[i - 1]
         const tr = Math.max(
           current.high - current.low,
           Math.abs(current.high - previous.close),
           Math.abs(current.low - previous.close)
         )
-        sum += tr
+        trValues.push(tr)
       }
-      return sum / period
+      
+      // Use RMA (Running Moving Average) like Pine Script ta.rma()
+      if (trValues.length < period) return null
+      let rma = trValues[0]
+      for (let i = 1; i < trValues.length; i++) {
+        rma = (rma * (period - 1) + trValues[i]) / period
+      }
+      return rma
     }
     
     const calculateRMA = (values: number[], period: number) => {
@@ -469,21 +478,29 @@ function App() {
     }
     
     const calculateADX = (data: any[], period: number, index: number) => {
-      if (index < period * 2) return null
+      if (index < period * 3) return null // Need more data for proper ADX
       
+      // Calculate Directional Movement and True Range
       let plusDMs = []
       let minusDMs = []
       let trs = []
+      let dxValues = []
       
-      for (let i = Math.max(1, index - period * 2); i <= index; i++) {
-        const chH = data[i].high - data[i - 1].high
-        const chL = data[i - 1].low - data[i].low
-        const plusDM = (chH > chL && chH > 0) ? chH : 0
-        const minusDM = (chL > chH && chL > 0) ? chL : 0
+      // Calculate DM and TR values
+      for (let i = Math.max(1, index - period * 3); i <= index; i++) {
+        const current = data[i]
+        const previous = data[i - 1]
+        
+        const upMove = current.high - previous.high
+        const downMove = previous.low - current.low
+        
+        const plusDM = (upMove > downMove && upMove > 0) ? upMove : 0
+        const minusDM = (downMove > upMove && downMove > 0) ? downMove : 0
+        
         const tr = Math.max(
-          data[i].high - data[i].low,
-          Math.abs(data[i].high - data[i - 1].close),
-          Math.abs(data[i].low - data[i - 1].close)
+          current.high - current.low,
+          Math.abs(current.high - previous.close),
+          Math.abs(current.low - previous.close)
         )
         
         plusDMs.push(plusDM)
@@ -491,17 +508,37 @@ function App() {
         trs.push(tr)
       }
       
-      const trRMA = calculateRMA(trs.slice(-period), period)
-      const pdmRMA = calculateRMA(plusDMs.slice(-period), period)
-      const mdmRMA = calculateRMA(minusDMs.slice(-period), period)
+      // Calculate smoothed DM and TR using RMA
+      if (plusDMs.length < period * 2) return null
       
-      if (!trRMA || trRMA === 0) return null
+      let plusDI_rma = plusDMs[0]
+      let minusDI_rma = minusDMs[0]
+      let tr_rma = trs[0]
       
-      const plusDI = 100 * (pdmRMA / trRMA)
-      const minusDI = 100 * (mdmRMA / trRMA)
-      const dx = 100 * (Math.abs(plusDI - minusDI) / Math.max(plusDI + minusDI, 1e-10))
+      // Apply RMA smoothing
+      for (let i = 1; i < Math.min(plusDMs.length, period * 2); i++) {
+        plusDI_rma = (plusDI_rma * (period - 1) + plusDMs[i]) / period
+        minusDI_rma = (minusDI_rma * (period - 1) + minusDMs[i]) / period
+        tr_rma = (tr_rma * (period - 1) + trs[i]) / period
+        
+        // Calculate DX for the last 'period' values
+        if (i >= period - 1) {
+          const plusDI = tr_rma === 0 ? 0 : 100 * (plusDI_rma / tr_rma)
+          const minusDI = tr_rma === 0 ? 0 : 100 * (minusDI_rma / tr_rma)
+          const dx = (plusDI + minusDI) === 0 ? 0 : 100 * (Math.abs(plusDI - minusDI) / (plusDI + minusDI))
+          dxValues.push(dx)
+        }
+      }
       
-      return dx // Simplified ADX calculation
+      // Calculate ADX as RMA of DX values
+      if (dxValues.length < period) return null
+      
+      let adx = dxValues[0]
+      for (let i = 1; i < dxValues.length; i++) {
+        adx = (adx * (period - 1) + dxValues[i]) / period
+      }
+      
+      return adx
     }
     
     const calculateChoppiness = (data: any[], period: number, index: number) => {
@@ -532,8 +569,9 @@ function App() {
     
     const getDonchianHigh = (data: any[], period: number, index: number) => {
       if (index < period) return null
-      let highest = data[index - period].high // Previous bars only [1]
-      for (let i = index - period + 1; i < index; i++) {
+      // Pine Script: ta.highest(high, period)[1] - excludes current bar
+      let highest = data[index - period].high
+      for (let i = index - period + 1; i < index; i++) { // i < index excludes current bar
         highest = Math.max(highest, data[i].high)
       }
       return highest
@@ -602,20 +640,21 @@ function App() {
         })
       }
       
-      // Exit logic for long positions
+      // Exit logic for long positions - Pine Script behavior
       if (position === 'LONG') {
-        // Update peak close for trailing stop
+        // Update peak close BEFORE checking exit conditions (Pine Script timing)
+        const previousPeak = peakClose
         peakClose = Math.max(peakClose, currentBar.close)
         
-        // Calculate trailing stop
-        const trailStop = peakClose - atrMult * atr
+        // Calculate trailing stop using previous bar's peak
+        const trailStop = previousPeak - atrMult * atr
         
-        // Check trend exit
+        // Check trend exit (close < SMA fast)
         const trendExit = currentBar.close < smaFast
         
-        // Exit conditions
-        if (currentBar.low <= trailStop || trendExit) {
-          const exitPrice = trendExit ? currentBar.close : trailStop
+        // Pine Script exit conditions: strategy.exit() triggers on bar close
+        if (currentBar.close <= trailStop || trendExit) {
+          const exitPrice = trendExit ? currentBar.close : Math.min(currentBar.close, trailStop)
           const pnl = positionSize * (exitPrice - entryPrice)
           equity += pnl
           
@@ -626,7 +665,7 @@ function App() {
             size: positionSize,
             pnl: pnl,
             equity: equity,
-            comment: trendExit ? 'Below SMA Fast' : `ATR Trail (${atrMult}x)`
+            comment: trendExit ? 'Close < SMA Fast' : `ATR Trail Stop (${atrMult}x ATR)`
           })
           
           position = null
