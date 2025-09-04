@@ -159,6 +159,7 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
 function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [selectedSource, setSelectedSource] = useState('binance')
+  const [selectedInstrument, setSelectedInstrument] = useState('BTC/USD')
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>('breakout-long-short')
   const [livePrice, setLivePrice] = useState(initialPrice)
   const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
@@ -976,12 +977,12 @@ function App() {
   // Make selectedSource globally available for components
   useEffect(() => {
     (window as any).selectedDataSource = selectedSource
-  }, [selectedSource])
+  }, [selectedSource, selectedInstrument])
 
   useEffect(() => {
     const fetchLivePrice = async () => {
       try {
-        const priceData = await livePriceService.getLiveBitcoinPrice(selectedSource)
+        const priceData = await livePriceService.getLiveCryptoPrice(selectedInstrument, selectedSource)
         console.log('App received live price data:', {
           price: priceData.price,
           source: priceData.source,
@@ -1013,7 +1014,7 @@ function App() {
     // Then fetch every 30 seconds
     const interval = setInterval(fetchLivePrice, 30000)
     return () => clearInterval(interval)
-  }, [selectedSource])
+  }, [selectedSource, selectedInstrument])
 
   return (
     <div style={{
@@ -1038,7 +1039,7 @@ function App() {
               margin: '0 0 0.5rem 0',
               color: '#f0f6fc'
             }}>
-              🚀 BTC Strategy
+              🚀 {selectedInstrument.split('/')[0]} Strategy
             </h1>
             <p style={{ 
               margin: 0, 
@@ -1089,6 +1090,31 @@ function App() {
               <option value="coinbase">Coinbase Pro (Active)</option>
               <option value="binance">Binance</option>
               <option value="bitstamp">Bitstamp</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label style={{ 
+              fontSize: '0.9rem', 
+              color: '#f0f6fc', 
+              fontWeight: '500',
+              marginBottom: '0.25rem'
+            }}>
+              Instrument Selection
+            </label>
+            <select 
+              value={selectedInstrument}
+              onChange={(e) => setSelectedInstrument(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                borderRadius: '4px',
+                border: 'none',
+                backgroundColor: 'white',
+                color: 'black'
+              }}
+            >
+              <option value="BTC/USD">Bitcoin (BTC/USD)</option>
+              <option value="ETH/USD">Ethereum (ETH/USD)</option>
             </select>
           </div>
           
@@ -1324,7 +1350,7 @@ function App() {
         }}>
           <div>
             <div style={{ fontSize: '0.9rem', color: '#7d8590', marginBottom: '0.25rem' }}>
-              Bitcoin - {selectedSource.toUpperCase()}
+              {selectedInstrument.split('/')[0]} - {selectedSource.toUpperCase()}
             </div>
             <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f0f6fc' }}>
               {livePrice.price > 0 ? `$${livePrice.price.toLocaleString()}` : 'Loading...'}
@@ -1356,7 +1382,7 @@ function App() {
             marginBottom: '1rem'
           }}>
             <h3 style={{ margin: 0, color: '#f0f6fc' }}>
-              Bitcoin (BTC/USD) - {selectedSource.toUpperCase()}
+              {selectedInstrument.split('/')[0] === 'BTC' ? 'Bitcoin' : 'Ethereum'} ({selectedInstrument}) - {selectedSource.toUpperCase()}
             </h3>
             <div style={{ 
               fontSize: '0.8rem', 
@@ -1373,6 +1399,7 @@ function App() {
               key={refreshKey}
               height={400}
               source={selectedSource}
+              instrument={selectedInstrument}
               onTimeframeChange={setSelectedTimeframe}
               tradeSignals={allTrades.filter(trade => trade.action.includes('ENTRY')).map(trade => {
                 // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
@@ -1406,7 +1433,7 @@ function App() {
                 marginBottom: '0.5rem'
               }}>
                 <span style={{ fontSize: '1.2rem' }}>🚀</span>
-                <span style={{ fontWeight: 'bold', color: '#f0f6fc' }}>Live Bitcoin Price</span>
+                <span style={{ fontWeight: 'bold', color: '#f0f6fc' }}>Live {selectedInstrument.split('/')[0]} Price</span>
               </div>
               <div style={{ 
                 fontSize: '1.5rem', 

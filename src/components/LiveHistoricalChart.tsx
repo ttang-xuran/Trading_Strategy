@@ -21,12 +21,13 @@ interface Props {
   height?: number
   tradeSignals?: TradeSignal[]
   source: string
+  instrument?: string
   onTimeframeChange?: (timeframe: string) => void
 }
 
 type TimeRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | '10Y'
 
-export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source, onTimeframeChange }: Props) {
+export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source, instrument = 'BTC/USD', onTimeframeChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
   const [panOffset, setPanOffset] = useState(0)
