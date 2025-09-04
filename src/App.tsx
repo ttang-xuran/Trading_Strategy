@@ -448,9 +448,12 @@ function App() {
     const calculateATR = (data: any[], period: number, index: number) => {
       if (index < 1) return null // Need at least 2 bars for TR calculation
       if (index < period) {
-        // For the first 'period' bars, use simple moving average
+        // For the first 'period' bars, use simple moving average over available bars only
+        // But limit to exactly 'period' bars to ensure history independence
+        const startIndex = Math.max(1, index - period + 1)
         let sum = 0
-        for (let i = 1; i <= index; i++) {
+        let count = 0
+        for (let i = startIndex; i <= index; i++) {
           const current = data[i]
           const previous = data[i - 1]
           const tr = Math.max(
@@ -459,8 +462,9 @@ function App() {
             Math.abs(current.low - previous.close)
           )
           sum += tr
+          count++
         }
-        return sum / index
+        return sum / count
       }
       
       // For bar >= period, use proper RMA like Pine Script ta.rma()
