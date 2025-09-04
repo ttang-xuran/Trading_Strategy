@@ -781,7 +781,7 @@ class LivePriceService {
   /**
    * Fetch extended historical data using multiple batched API calls
    */
-  private async fetchExtendedHistoricalData(source: string, totalDays: number): Promise<any[]> {
+  private async fetchExtendedHistoricalData(source: string, totalDays: number, instrument: string = 'BTC/USD'): Promise<any[]> {
     console.log(`fetchExtendedHistoricalData: Fetching ${totalDays} days from ${source} using multiple batches`)
     
     // Try primary source first, then fallback sources if it fails
@@ -800,7 +800,7 @@ class LivePriceService {
     for (const currentSource of allSources) {
       try {
         console.log(`🔄 Trying extended fetch with ${currentSource} (${currentSource === primarySource ? 'primary' : 'fallback'})`)
-        const result = await this.performExtendedFetch(currentSource, totalDays, apiLimits)
+        const result = await this.performExtendedFetch(currentSource, totalDays, apiLimits, instrument)
         if (result && result.length > 0) {
           console.log(`✅ Extended fetch successful with ${currentSource}: ${result.length} candles`)
           
@@ -831,7 +831,7 @@ class LivePriceService {
     throw new Error(`All sources failed for extended historical data (${totalDays} days)`)
   }
 
-  private async performExtendedFetch(source: string, totalDays: number, apiLimits: Record<string, number>): Promise<any[]> {
+  private async performExtendedFetch(source: string, totalDays: number, apiLimits: Record<string, number>, instrument: string = 'BTC/USD'): Promise<any[]> {
     const batchSize = apiLimits[source.toLowerCase() as keyof typeof apiLimits] || 365
     const numBatches = Math.ceil(totalDays / batchSize)
     
@@ -855,19 +855,19 @@ class LivePriceService {
         let batchData: any[]
         switch (source.toLowerCase()) {
           case 'coinbase':
-            batchData = await this.fetchCoinbaseHistoricalRange(startDate, endDate)
+            batchData = await this.fetchCoinbaseHistoricalRange(startDate, endDate, instrument)
             break
           case 'bitstamp':
-            batchData = await this.fetchBitstampHistoricalRange(startDate, endDate) 
+            batchData = await this.fetchBitstampHistoricalRange(startDate, endDate, instrument) 
             break
           case 'binance':
-            batchData = await this.fetchBinanceHistoricalRange(startDate, endDate)
+            batchData = await this.fetchBinanceHistoricalRange(startDate, endDate, instrument)
             break
           case 'coingecko':
-            batchData = await this.fetchCoinGeckoHistoricalRange(startDate, endDate)
+            batchData = await this.fetchCoinGeckoHistoricalRange(startDate, endDate, instrument)
             break
           default:
-            batchData = await this.fetchCoinGeckoHistoricalRange(startDate, endDate)
+            batchData = await this.fetchCoinGeckoHistoricalRange(startDate, endDate, instrument)
         }
         
         if (batchData && batchData.length > 0) {
@@ -1122,10 +1122,12 @@ class LivePriceService {
   /**
    * Date range fetch methods for batched historical data fetching
    */
-  private async fetchCoinbaseHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+  private async fetchCoinbaseHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
     console.log(`Fetching Coinbase data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
-    const apiUrl = `https://api.exchange.coinbase.com/products/BTC-USD/candles?start=${startDate.toISOString()}&end=${endDate.toISOString()}&granularity=86400`
+    // Convert instrument to Coinbase product format  
+    const product = instrument.replace('/', '-') // BTC/USD -> BTC-USD, ETH/USD -> ETH-USD
+    const apiUrl = `https://api.exchange.coinbase.com/products/${product}/candles?start=${startDate.toISOString()}&end=${endDate.toISOString()}&granularity=86400`
     
     // Try multiple CORS proxies for historical data
     for (let proxyIndex = 0; proxyIndex < this.CORS_PROXIES.length; proxyIndex++) {
@@ -1159,15 +1161,17 @@ class LivePriceService {
     throw new Error('All CORS proxies failed for Coinbase historical data')
   }
   
-  private async fetchBitstampHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+  private async fetchBitstampHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
     console.log(`Fetching Bitstamp data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
     // Bitstamp doesn't support date ranges well, so calculate days and use limit
     const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
     const limit = Math.min(daysDiff, 1000)
     
+    // Convert instrument to Bitstamp pair format
+    const pair = instrument.toLowerCase().replace('/', '') // BTC/USD -> btcusd, ETH/USD -> ethusd
     const response = await fetch(
-      `https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=86400&limit=${limit}`
+      `https://www.bitstamp.net/api/v2/ohlc/${pair}/?step=86400&limit=${limit}`
     )
     
     if (!response.ok) throw new Error('Bitstamp range API failed')
@@ -1190,15 +1194,18 @@ class LivePriceService {
     )
   }
   
-  private async fetchBinanceHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+  private async fetchBinanceHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
     console.log(`Fetching Binance data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
     // Binance supports start/end times
     const startTime = startDate.getTime()
     const endTime = endDate.getTime()
     
+    // Convert instrument to Binance symbol format
+    const symbol = instrument.replace('/', '').replace('USD', 'USDT') // BTC/USD -> BTCUSDT, ETH/USD -> ETHUSDT
+    
     const response = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&startTime=${startTime}&endTime=${endTime}&limit=1000`
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTime}&endTime=${endTime}&limit=1000`
     )
     
     if (!response.ok) throw new Error('Binance range API failed')
@@ -1215,16 +1222,24 @@ class LivePriceService {
     }))
   }
   
-  private async fetchCoinGeckoHistoricalRange(startDate: Date, endDate: Date): Promise<any[]> {
+  private async fetchCoinGeckoHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
     console.log(`Fetching CoinGecko data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
     // Calculate days for CoinGecko API
     const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
     const limitedDays = Math.min(daysDiff, 365)
     
+    // Convert instrument to CoinGecko coin ID
+    const coinId = instrument.split('/')[0].toLowerCase() // BTC/USD -> bitcoin, ETH/USD -> ethereum
+    const coinMap: Record<string, string> = {
+      'btc': 'bitcoin',
+      'eth': 'ethereum'
+    }
+    const geckoId = coinMap[coinId] || 'bitcoin'
+    
     // CoinGecko doesn't support exact date ranges, but we can filter the results
     const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${limitedDays}&interval=daily`
+      `https://api.coingecko.com/api/v3/coins/${geckoId}/market_chart?vs_currency=usd&days=${limitedDays}&interval=daily`
     )
     
     if (!response.ok) throw new Error('CoinGecko range API failed')
