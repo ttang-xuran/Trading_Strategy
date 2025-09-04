@@ -573,7 +573,9 @@ function App() {
     }
     
     // Process each day - EXACT Pine Script execution model (matching Breakout strategy)
-    for (let i = Math.max(smaSlowLen, adxLen * 2, chopLen); i < ohlcData.length; i++) {
+    // Ensure STRICT warmup period for history-independent results across all timeframes
+    const minWarmupPeriod = Math.max(smaSlowLen * 2, adxLen * 3, chopLen * 2)  // Extra warmup for stability
+    for (let i = minWarmupPeriod; i < ohlcData.length; i++) {
       const currentBar = ohlcData[i]
       const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null
       
@@ -694,7 +696,7 @@ function App() {
     }
   }
 
-  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '6M', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', customParameters?: any) => {
+  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '5Y', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', customParameters?: any) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
     try {
@@ -750,7 +752,7 @@ function App() {
   const [backtestCompleted, setBacktestCompleted] = useState(false)
   const [historicalDataCount, setHistoricalDataCount] = useState<number>(0)
   // State to track selected timeframe from chart component
-  const [selectedTimeframe, setSelectedTimeframe] = useState('6M')
+  const [selectedTimeframe, setSelectedTimeframe] = useState('5Y')
   
   // User-configurable strategy parameters (dynamically set based on selected strategy)
   const [userParameters, setUserParameters] = useState(
