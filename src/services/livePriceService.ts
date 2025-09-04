@@ -40,6 +40,7 @@ class LivePriceService {
   private instrumentCache: { [key: string]: LivePriceData } | null = null
   private instrumentCacheExpiry: { [key: string]: number } | null = null
   private readonly MEMORY_CACHE_DURATION = 30000 // 30 seconds
+  private readonly cacheExpiry = 30000 // 30 seconds for instrument cache
   private readonly PERSISTENT_CACHE_DURATION = 300000 // 5 minutes
   private readonly STALE_CACHE_DURATION = 3600000 // 1 hour for emergency fallback
   
@@ -258,6 +259,20 @@ class LivePriceService {
     return true
   }
   
+  /**
+   * Mark source as successful (for new multi-instrument API)
+   */
+  private markSourceSuccess(source: string): void {
+    this.updateApiHealth(source, true)
+  }
+
+  /**
+   * Mark source as failed (for new multi-instrument API)  
+   */
+  private markSourceFailure(source: string, error?: string): void {
+    this.updateApiHealth(source, false, error)
+  }
+
   /**
    * Update API health status
    */
@@ -687,38 +702,38 @@ class LivePriceService {
    * Get real historical OHLC data from specific source with enhanced error handling
    * For long timeframes (>1000 days), uses multiple API calls to fetch extended data
    */
-  async getHistoricalData(source: string, days: number = 90): Promise<any[]> {
-    console.log(`getHistoricalData called: source=${source}, days=${days}`)
+  async getHistoricalData(source: string, days: number = 90, instrument: string = 'BTC/USD'): Promise<any[]> {
+    console.log(`getHistoricalData called: source=${source}, days=${days}, instrument=${instrument}`)
     
     // For long timeframes, use multi-batch fetching to get more data
     const isLongTimeframe = days > 1000
     if (isLongTimeframe) {
       console.log(`🚀 MULTI-BATCH: Long timeframe requested (${days} days). Will use multiple API calls to fetch extended data.`)
-      return this.fetchExtendedHistoricalData(source, days)
+      return this.fetchExtendedHistoricalData(source, days, instrument)
     }
     
     try {
       let result: any[]
       switch (source.toLowerCase()) {
         case 'coinbase':
-          console.log('Fetching from Coinbase...')
-          result = await this.fetchCoinbaseHistorical(days)
+          console.log(`Fetching ${instrument} from Coinbase...`)
+          result = await this.fetchCoinbaseHistorical(days, instrument)
           break
         case 'bitstamp':
-          console.log('Fetching from Bitstamp...')
-          result = await this.fetchBitstampHistorical(days)
+          console.log(`Fetching ${instrument} from Bitstamp...`)
+          result = await this.fetchBitstampHistorical(days, instrument)
           break
         case 'binance':
-          console.log('Fetching from Binance...')
-          result = await this.fetchBinanceHistorical(days)
+          console.log(`Fetching ${instrument} from Binance...`)
+          result = await this.fetchBinanceHistorical(days, instrument)
           break
         case 'coingecko':
-          console.log('Fetching from CoinGecko...')
-          result = await this.fetchCoinGeckoHistorical(days)
+          console.log(`Fetching ${instrument} from CoinGecko...`)
+          result = await this.fetchCoinGeckoHistorical(days, instrument)
           break
         default:
-          console.log(`Unknown source: ${source}, falling back to CoinGecko`)
-          result = await this.fetchCoinGeckoHistorical(days)
+          console.log(`Unknown source: ${source}, falling back to CoinGecko for ${instrument}`)
+          result = await this.fetchCoinGeckoHistorical(days, instrument)
       }
       
       console.log(`Historical data fetch result: ${result.length} candles`)
@@ -999,17 +1014,20 @@ class LivePriceService {
     })).sort((a: any, b: any) => a.timestamp - b.timestamp)
   }
 
-  private async fetchBinanceHistorical(days: number): Promise<any[]> {
+  private async fetchBinanceHistorical(days: number, instrument: string = 'BTC/USD'): Promise<any[]> {
+    // Convert instrument format to Binance symbol (BTC/USD -> BTCUSDT, ETH/USD -> ETHUSDT)
+    const symbol = instrument.replace('/', '').replace('USD', 'USDT')
+    
     // Binance klines API - use limit only for better compatibility
     let limit: number
     
     // For long timeframes, get maximum available data
     // Binance API limit is 1000 days
     limit = Math.min(days, 1000)
-    console.log(`Fetching ${limit} days of Binance data (API maximum: 1000 days)`)
+    console.log(`Fetching ${limit} days of ${instrument} data from Binance (API maximum: 1000 days)`)
     
     const response = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=${limit}`
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=${limit}`
     )
     
     if (!response.ok) throw new Error('Binance historical API failed')

@@ -86,7 +86,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       console.log(`Requesting ${days} days of data for ${timeframe} from ${source}`)
       console.log(`Date range: ${new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()} to ${new Date().toISOString()}`)
       
-      const historicalData = await livePriceService.getHistoricalData(source, days)
+      const historicalData = await livePriceService.getHistoricalData(source, days, instrument)
       
       if (!historicalData || historicalData.length === 0) {
         throw new Error('No historical data received from livePriceService')

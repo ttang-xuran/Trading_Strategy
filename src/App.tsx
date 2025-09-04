@@ -697,7 +697,7 @@ function App() {
     }
   }
 
-  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '5Y', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', customParameters?: any) => {
+  const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '5Y', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', instrument: string = 'BTC/USD', customParameters?: any) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
     try {
@@ -715,7 +715,7 @@ function App() {
       // Get REAL historical OHLC data from the selected exchange for the selected timeframe
       const days = getTimeframeDays(timeframe)
       console.log(`Fetching ${days} days of real historical data from ${source}...`)
-      const ohlcData = await livePriceService.getHistoricalData(source, days)
+      const ohlcData = await livePriceService.getHistoricalData(source, days, instrument)
       
       console.log(`Received ${ohlcData.length} days of REAL ${source} OHLC data`)
       
@@ -774,7 +774,7 @@ function App() {
     try {
       console.log('Starting backtest for source:', selectedSource, 'timeframe:', selectedTimeframe, 'capital:', initialCapital, 'strategy:', selectedStrategy)
       console.log('Using custom parameters:', userParameters)
-      const result = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy, userParameters)
+      const result = await generateAllTrades(selectedSource, selectedTimeframe, initialCapital, selectedStrategy, selectedInstrument, userParameters)
       console.log('Backtest completed:', result.trades.length, 'trades')
       setAllTrades(result.trades)
       setHistoricalDataCount(result.historicalDataCount)
