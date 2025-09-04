@@ -35,7 +35,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   const [candleData, setCandleData] = useState<CandleData[]>([])
   const [currentPrice, setCurrentPrice] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('6M')
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('5Y')
   const [allHistoricalData, setAllHistoricalData] = useState<CandleData[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -75,7 +75,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   }
 
   // Load historical data using livePriceService for REAL market data
-  const loadHistoricalData = async (timeframe: TimeRange = '6M'): Promise<CandleData[]> => {
+  const loadHistoricalData = async (timeframe: TimeRange = '5Y'): Promise<CandleData[]> => {
     try {
       setLoading(true)
       console.log(`Loading REAL historical data from ${source} for timeframe ${timeframe}`)
