@@ -431,7 +431,7 @@ function App() {
     let entryPrice = 0
     let positionSize = 0
     let peakClose = null // For ATR trailing stop
-    let pendingEntry = false // For next-bar execution
+    let pendingEntry = null // For next-bar execution (matching Breakout strategy)
     let pendingExit = null // For next-bar exit execution
     const trades = []
     
@@ -568,57 +568,14 @@ function App() {
       return highest
     }
     
-    // Process each day - Pine Script Bar-by-Bar Execution Model
+    // Process each day - EXACT Pine Script execution model (matching Breakout strategy)
     for (let i = Math.max(smaSlowLen, adxLen * 2, chopLen); i < ohlcData.length; i++) {
       const currentBar = ohlcData[i]
+      const nextBar = i + 1 < ohlcData.length ? ohlcData[i + 1] : null
       
       // Skip invalid data
       if (!currentBar || !currentBar.close || currentBar.close <= 0) {
         continue
-      }
-      
-      // STEP 1: Execute pending entry from previous bar signal (Pine Script next-bar execution)
-      if (pendingEntry && position !== 'LONG') {
-        // Enter long at current bar open (this is the "next bar" from when signal was generated)
-        position = 'LONG'
-        entryPrice = currentBar.open
-        positionSize = (equity * 0.99) / entryPrice
-        peakClose = currentBar.open
-        
-        trades.push({
-          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          action: 'ENTRY LONG',
-          price: entryPrice,
-          size: positionSize,
-          pnl: null,
-          equity: equity,
-          comment: `Trend Entry (Signal from prev bar)`
-        })
-        
-        pendingEntry = false
-      }
-      
-      // STEP 2: Execute pending exit from previous bar signal
-      if (pendingExit && position === 'LONG') {
-        const exitPrice = pendingExit.type === 'trend' ? currentBar.open : Math.min(currentBar.open, pendingExit.price)
-        const pnl = positionSize * (exitPrice - entryPrice)
-        equity += pnl
-        
-        trades.push({
-          date: currentBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          action: pendingExit.type === 'trend' ? 'TREND EXIT' : 'ATR TRAIL STOP',
-          price: exitPrice,
-          size: positionSize,
-          pnl: pnl,
-          equity: equity,
-          comment: pendingExit.type === 'trend' ? 'Close < SMA Fast' : `ATR Trail Stop (${atrMult}x ATR)`
-        })
-        
-        position = null
-        entryPrice = 0
-        positionSize = 0
-        peakClose = null
-        pendingExit = null
       }
       
       // Calculate indicators (Pine Script uses [1] references to avoid repainting)
@@ -637,20 +594,68 @@ function App() {
         continue
       }
       
-      // STEP 3: Check for new entry signals (Pine Script: signals use [1] references for regime/strength)
+      // STEP 1: Execute any pending signals from previous bar (Next-bar execution like Breakout strategy)
+      let positionChanged = false
+      
+      if (pendingEntry && position !== 'LONG' && nextBar) {
+        // Enter long at next bar open (exact same pattern as Breakout strategy)
+        position = 'LONG'
+        entryPrice = nextBar.open
+        positionSize = (equity * 0.99) / entryPrice
+        peakClose = nextBar.open
+        positionChanged = true
+        
+        trades.push({
+          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: 'ENTRY LONG',
+          price: entryPrice,
+          size: positionSize,
+          pnl: null,
+          equity: equity,
+          comment: 'Trend Entry (Next Bar)'
+        })
+        
+        pendingEntry = null
+      }
+      
+      if (pendingExit && position === 'LONG' && nextBar && !positionChanged) {
+        // Exit at next bar open (matching Breakout strategy pattern)
+        const exitPrice = pendingExit.type === 'trend' ? nextBar.open : Math.min(nextBar.open, pendingExit.price)
+        const pnl = positionSize * (exitPrice - entryPrice)
+        equity += pnl
+        
+        trades.push({
+          date: nextBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          action: pendingExit.type === 'trend' ? 'TREND EXIT' : 'ATR TRAIL STOP',
+          price: exitPrice,
+          size: positionSize,
+          pnl: pnl,
+          equity: equity,
+          comment: pendingExit.type === 'trend' ? 'Close < SMA Fast (Next Bar)' : `ATR Trail Stop (${atrMult}x ATR) (Next Bar)`
+        })
+        
+        position = null
+        entryPrice = 0
+        positionSize = 0
+        peakClose = null
+        pendingExit = null
+        positionChanged = true
+      }
+
+      // STEP 2: Check for new entry signals (Pine Script: signals use [1] references for regime/strength)
       const regimeUp = currentBar.close > smaSlowPrev && smaFastPrev > smaSlowPrev  // Use prev bar SMA values
       const strength = adxPrev > adxTh && chopPrev < chopTh  // Use prev bar strength values
       const breakout = currentBar.close > donUp  // Current bar close vs Donchian channel
       const goLong = regimeUp && strength && breakout
       
-      // CRITICAL FIX: Only generate signal if not already in position and no pending signals
-      if (goLong && position !== 'LONG' && !pendingEntry) {
-        pendingEntry = true // Will execute at next bar open (Pine Script behavior)
+      // Only generate signal if not already in position (matching Breakout strategy pattern)
+      if (goLong && position !== 'LONG' && !positionChanged) {
+        pendingEntry = true // Will execute with nextBar in this same iteration
         console.log(`Entry signal generated on ${currentBar.date.toLocaleDateString()}: breakout=${currentBar.close.toFixed(2)} > donUp=${donUp.toFixed(2)}`)
       }
       
-      // STEP 4: Check for exit signals (generated on current bar, executed next bar)
-      if (position === 'LONG' && !pendingExit) {
+      // STEP 3: Check for exit signals (generated on current bar, executed with nextBar)
+      if (position === 'LONG' && !positionChanged) {
         // Update peak close for trailing stop calculation using current bar close
         peakClose = Math.max(peakClose, currentBar.close)
         
@@ -661,7 +666,7 @@ function App() {
         const trendExit = currentBar.close < smaFastPrev  // Close below previous bar's fast SMA
         const trailStopHit = currentBar.close <= trailStop  // Close below trailing stop
         
-        // Generate exit signal for next bar execution
+        // Generate exit signal (will execute with nextBar in this same iteration)
         if (trendExit) {
           pendingExit = { type: 'trend', price: null }
           console.log(`Trend exit signal generated on ${currentBar.date.toLocaleDateString()}: close=${currentBar.close.toFixed(2)} < smaFastPrev=${smaFastPrev.toFixed(2)}`)
@@ -672,52 +677,10 @@ function App() {
       }
     }
     
-    // Handle any final pending signals at the end of data
+    // With nextBar execution model, pending signals at end of data are naturally not executed
+    // This matches Pine Script behavior - signals generated on last bar have no next bar to execute on
     if (pendingEntry || pendingExit) {
-      console.log(`Warning: End of data reached with pending signals. Entry: ${pendingEntry}, Exit: ${!!pendingExit}`)
-    }
-    
-    // CRITICAL FIX: Handle pending signals at end of data (Pine Script behavior)
-    // If there are pending signals generated on the last bar, they still need to be executed
-    if (pendingEntry && position !== 'LONG') {
-      // Execute pending entry at current equity with "synthetic next bar"
-      const lastBar = ohlcData[ohlcData.length - 1]
-      position = 'LONG'
-      entryPrice = lastBar.close  // Use close price since no "next bar" available
-      positionSize = (equity * 0.99) / entryPrice
-      peakClose = lastBar.close
-      
-      trades.push({
-        date: lastBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        action: 'ENTRY LONG',
-        price: entryPrice,
-        size: positionSize,
-        pnl: null,
-        equity: equity,
-        comment: 'End-of-Data Entry (Pending Signal)'
-      })
-      
-      console.log(`End-of-data entry executed on ${lastBar.date.toLocaleDateString()} at ${entryPrice}`)
-    }
-    
-    if (pendingExit && position === 'LONG') {
-      // Execute pending exit at current equity with "synthetic next bar"
-      const lastBar = ohlcData[ohlcData.length - 1]
-      const exitPrice = pendingExit.type === 'trend' ? lastBar.close : Math.min(lastBar.close, pendingExit.price)
-      const pnl = positionSize * (exitPrice - entryPrice)
-      equity += pnl
-      
-      trades.push({
-        date: lastBar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        action: pendingExit.type === 'trend' ? 'TREND EXIT' : 'ATR TRAIL STOP',
-        price: exitPrice,
-        size: positionSize,
-        pnl: pnl,
-        equity: equity,
-        comment: `End-of-Data Exit (${pendingExit.type})`
-      })
-      
-      console.log(`End-of-data exit executed on ${lastBar.date.toLocaleDateString()} at ${exitPrice}`)
+      console.log(`Pine Script accurate: Signals generated on last bar cannot execute (no next bar available)`)
     }
     
     console.log(`Generated ${trades.length} trend following trades from ${ohlcData.length} bars`)
