@@ -1195,14 +1195,13 @@ class LivePriceService {
   }
   
   private async fetchBinanceHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
-    console.log(`Fetching Binance data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    // Convert instrument to Binance symbol format
+    const symbol = instrument.replace('/', '').replace('USD', 'USDT') // BTC/USD -> BTCUSDT, ETH/USD -> ETHUSDT
+    console.log(`Fetching Binance data for ${instrument} (symbol: ${symbol}) from ${startDate.toISOString()} to ${endDate.toISOString()}`)
     
     // Binance supports start/end times
     const startTime = startDate.getTime()
     const endTime = endDate.getTime()
-    
-    // Convert instrument to Binance symbol format
-    const symbol = instrument.replace('/', '').replace('USD', 'USDT') // BTC/USD -> BTCUSDT, ETH/USD -> ETHUSDT
     
     const response = await fetch(
       `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTime}&endTime=${endTime}&limit=1000`
@@ -1211,8 +1210,7 @@ class LivePriceService {
     if (!response.ok) throw new Error('Binance range API failed')
     
     const data = await response.json()
-    
-    return data.map((candle: any[]) => ({
+    const result = data.map((candle: any[]) => ({
       date: new Date(candle[0]),
       open: parseFloat(candle[1]),
       high: parseFloat(candle[2]),
@@ -1220,6 +1218,12 @@ class LivePriceService {
       close: parseFloat(candle[4]),
       timestamp: candle[0]
     }))
+    
+    if (result.length > 0) {
+      console.log(`✅ Binance ${instrument} range fetch: ${result.length} candles, first close: ${result[0].close}, last close: ${result[result.length-1].close}`)
+    }
+    
+    return result
   }
   
   private async fetchCoinGeckoHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
