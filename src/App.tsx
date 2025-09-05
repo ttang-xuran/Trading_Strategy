@@ -1099,6 +1099,8 @@ function App() {
               <option value="coinbase">Coinbase Pro (Active)</option>
               <option value="binance">Binance</option>
               <option value="bitstamp">Bitstamp</option>
+              <option value="kraken">Kraken</option>
+              <option value="hyperliquid">Hyperliquid</option>
             </select>
           </div>
 
