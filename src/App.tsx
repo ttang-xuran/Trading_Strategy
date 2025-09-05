@@ -979,6 +979,13 @@ function App() {
     (window as any).selectedDataSource = selectedSource
   }, [selectedSource, selectedInstrument])
 
+  // Clear trades when instrument changes to prevent stale data display
+  useEffect(() => {
+    setAllTrades([])
+    setBacktestCompleted(false)
+    setHistoricalDataCount(0)
+  }, [selectedInstrument])
+
   useEffect(() => {
     const fetchLivePrice = async () => {
       try {

@@ -229,13 +229,13 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     if (onTimeframeChange) {
       onTimeframeChange(selectedTimeRange)
     }
-  }, [source, selectedTimeRange])
+  }, [source, selectedTimeRange, instrument])
 
   // Update live price and current candle
   useEffect(() => {
     const updateLiveData = async () => {
       try {
-        const priceData = await livePriceService.getLiveBitcoinPrice()
+        const priceData = await livePriceService.getLiveCryptoPrice(instrument, source)
         setCurrentPrice(priceData.price)
         updateCurrentCandle(priceData.price)
       } catch (error) {
@@ -247,7 +247,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
     const interval = setInterval(updateLiveData, 30000) // Update every 30 seconds
     
     return () => clearInterval(interval)
-  }, [candleData.length])
+  }, [candleData.length, instrument, source])
 
   const drawChart = () => {
     const canvas = canvasRef.current
