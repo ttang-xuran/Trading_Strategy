@@ -1449,17 +1449,12 @@ class LivePriceService {
     // Convert instrument format to Hyperliquid symbol (BTC/USD -> BTC, ETH/USD -> ETH)
     const symbol = instrument.split('/')[0]
     
-    // Hyperliquid uses a different API structure for historical data
-    // For now, we'll simulate by getting recent price points and creating OHLC approximations
-    console.log(`Fetching ${days} days of ${instrument} data from Hyperliquid (limited historical data)`)
+    console.log(`Fetching ${days} days of ${instrument} data from Hyperliquid`)
     
-    // Note: Hyperliquid API might have limited historical data
-    // This is a basic implementation that may need enhancement based on API capabilities
     const endTime = Date.now()
     const startTime = endTime - (days * 24 * 60 * 60 * 1000)
     
     try {
-      // This is a simplified approach - real implementation would use proper historical endpoints
       const response = await fetch('https://api.hyperliquid.xyz/info', {
         method: 'POST',
         headers: {
@@ -1467,26 +1462,26 @@ class LivePriceService {
         },
         body: JSON.stringify({
           type: 'candleSnapshot',
-          req: {
-            coin: symbol,
-            interval: '1d',
-            startTime: Math.floor(startTime / 1000),
-            endTime: Math.floor(endTime / 1000)
-          }
+          coin: symbol,
+          interval: '1d',
+          startTime: startTime, // Use milliseconds
+          endTime: endTime
         })
       })
       
       if (!response.ok) throw new Error(`Hyperliquid historical API failed: ${response.status}`)
       
       const data = await response.json()
+      console.log(`Hyperliquid API response:`, data)
       
       if (!data || !Array.isArray(data)) {
-        // Fallback: create synthetic data based on current price
-        console.warn('Hyperliquid historical data unavailable, using current price approximation')
+        console.warn(`Hyperliquid historical data format unexpected:`, typeof data, data)
+        
+        // Fallback: create synthetic data based on current price for testing
+        console.warn('Using synthetic data fallback for Hyperliquid')
         const currentPriceResponse = await this.fetchFromHyperliquid()
         const basePrice = currentPriceResponse.price
         
-        // Generate approximate historical data
         const candleData = []
         for (let i = days; i >= 0; i--) {
           const date = new Date(Date.now() - (i * 24 * 60 * 60 * 1000))
@@ -1507,7 +1502,7 @@ class LivePriceService {
       }
       
       // Convert Hyperliquid format to our format
-      return data.map((candle: any) => ({
+      const result = data.map((candle: any) => ({
         date: new Date(candle.t),
         open: parseFloat(candle.o),
         high: parseFloat(candle.h),
@@ -1516,8 +1511,11 @@ class LivePriceService {
         timestamp: candle.t
       })).sort((a: any, b: any) => a.timestamp - b.timestamp)
       
+      console.log(`Hyperliquid historical: ${result.length} candles fetched`)
+      return result
+      
     } catch (error) {
-      console.warn('Hyperliquid historical data error:', error)
+      console.error('Hyperliquid historical data error:', error)
       throw new Error(`Hyperliquid historical data unavailable: ${error}`)
     }
   }
@@ -1588,12 +1586,10 @@ class LivePriceService {
         },
         body: JSON.stringify({
           type: 'candleSnapshot',
-          req: {
-            coin: symbol,
-            interval: '1d',
-            startTime: Math.floor(startDate.getTime() / 1000),
-            endTime: Math.floor(endDate.getTime() / 1000)
-          }
+          coin: symbol,
+          interval: '1d',
+          startTime: startDate.getTime(), // Use milliseconds, not seconds
+          endTime: endDate.getTime()
         })
       })
       
@@ -1602,15 +1598,15 @@ class LivePriceService {
       const data = await response.json()
       
       if (!data || !Array.isArray(data)) {
-        // Fallback approach for range requests
-        console.warn('Hyperliquid range data unavailable, using approximation')
+        console.warn(`Hyperliquid range data format unexpected:`, typeof data, data)
         return []
       }
       
-      // Convert and filter to date range
+      // Convert Hyperliquid format to our format
+      // Hyperliquid format: { T: close_time_ms, t: open_time_ms, o: open, h: high, l: low, c: close, ... }
       const result = data
         .map((candle: any) => ({
-          date: new Date(candle.t),
+          date: new Date(candle.t), // Use open time
           open: parseFloat(candle.o),
           high: parseFloat(candle.h),
           low: parseFloat(candle.l),
@@ -1624,10 +1620,13 @@ class LivePriceService {
         .sort((a: any, b: any) => a.timestamp - b.timestamp)
       
       console.log(`✅ Hyperliquid ${instrument} range fetch: ${result.length} candles`)
+      if (result.length > 0) {
+        console.log(`First candle: ${result[0].date.toISOString().split('T')[0]}, Last candle: ${result[result.length-1].date.toISOString().split('T')[0]}`)
+      }
       return result
       
     } catch (error) {
-      console.warn('Hyperliquid range data error:', error)
+      console.error('Hyperliquid range data error:', error)
       return []
     }
   }
