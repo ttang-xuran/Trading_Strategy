@@ -1462,10 +1462,12 @@ class LivePriceService {
         },
         body: JSON.stringify({
           type: 'candleSnapshot',
-          coin: symbol,
-          interval: '1d',
-          startTime: startTime, // Use milliseconds
-          endTime: endTime
+          req: {
+            coin: symbol,
+            interval: '1d',
+            startTime: startTime, // Use milliseconds
+            endTime: endTime
+          }
         })
       })
       
@@ -1594,10 +1596,12 @@ class LivePriceService {
         },
         body: JSON.stringify({
           type: 'candleSnapshot',
-          coin: symbol,
-          interval: '1d',
-          startTime: startDate.getTime(),
-          endTime: endDate.getTime()
+          req: {
+            coin: symbol,
+            interval: '1d',
+            startTime: startDate.getTime(),
+            endTime: endDate.getTime()
+          }
         })
       })
       
