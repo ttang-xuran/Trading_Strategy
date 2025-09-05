@@ -863,6 +863,14 @@ class LivePriceService {
           console.log(`Fetching ${instrument} from CoinGecko...`)
           result = await this.fetchCoinGeckoHistorical(days, instrument)
           break
+        case 'kraken':
+          console.log(`Fetching ${instrument} from Kraken...`)
+          result = await this.fetchKrakenHistorical(days, instrument)
+          break
+        case 'hyperliquid':
+          console.log(`Fetching ${instrument} from Hyperliquid...`)
+          result = await this.fetchHyperliquidHistorical(days, instrument)
+          break
         default:
           console.log(`Unknown source: ${source}, falling back to CoinGecko for ${instrument}`)
           result = await this.fetchCoinGeckoHistorical(days, instrument)
