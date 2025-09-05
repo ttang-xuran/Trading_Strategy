@@ -23,11 +23,12 @@ interface Props {
   source: string
   instrument?: string
   onTimeframeChange?: (timeframe: string) => void
+  onDateRangeChange?: (dateRange: string) => void
 }
 
 type TimeRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | '10Y'
 
-export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source, instrument = 'BTC/USD', onTimeframeChange }: Props) {
+export default function LiveHistoricalChart({ height = 400, tradeSignals = [], source, instrument = 'BTC/USD', onTimeframeChange, onDateRangeChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
   const [panOffset, setPanOffset] = useState(0)
@@ -38,6 +39,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
   const [loading, setLoading] = useState(true)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('5Y')
   const [allHistoricalData, setAllHistoricalData] = useState<CandleData[]>([])
+  const [actualDateRange, setActualDateRange] = useState<string>('')
   const containerRef = useRef<HTMLDivElement>(null)
   
   // Hover state for OHLC tooltip
@@ -123,11 +125,22 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       
       console.log(`Successfully loaded ${candles.length} REAL candles from ${source} livePriceService`)
       
-      // Log date range of received data for debugging
+      // Log date range of received data for debugging and set state for display
       if (candles.length > 0) {
-        console.log(`Data date range: ${candles[0].date} to ${candles[candles.length - 1].date}`)
-        console.log(`First candle:`, candles[0])
-        console.log(`Last candle:`, candles[candles.length - 1])
+        const sortedCandles = candles.sort((a, b) => a.timestamp - b.timestamp)
+        const startDate = sortedCandles[0].date
+        const endDate = sortedCandles[sortedCandles.length - 1].date
+        const dateRangeText = `${startDate} to ${endDate}`
+        
+        console.log(`Data date range: ${dateRangeText}`)
+        console.log(`First candle:`, sortedCandles[0])
+        console.log(`Last candle:`, sortedCandles[sortedCandles.length - 1])
+        
+        setActualDateRange(dateRangeText)
+        if (onDateRangeChange) {
+          onDateRangeChange(dateRangeText)
+        }
+        return sortedCandles
       }
       
       return candles.sort((a, b) => a.timestamp - b.timestamp)

@@ -754,6 +754,7 @@ function App() {
   const [historicalDataCount, setHistoricalDataCount] = useState<number>(0)
   // State to track selected timeframe from chart component
   const [selectedTimeframe, setSelectedTimeframe] = useState('5Y')
+  const [chartDateRange, setChartDateRange] = useState<string>('')
   
   // User-configurable strategy parameters (dynamically set based on selected strategy)
   const [userParameters, setUserParameters] = useState(
@@ -984,6 +985,7 @@ function App() {
     setAllTrades([])
     setBacktestCompleted(false)
     setHistoricalDataCount(0)
+    setChartDateRange('')
   }, [selectedInstrument])
 
   useEffect(() => {
@@ -1390,6 +1392,7 @@ function App() {
           }}>
             <h3 style={{ margin: 0, color: '#f0f6fc' }}>
               {selectedInstrument.split('/')[0] === 'BTC' ? 'Bitcoin' : 'Ethereum'} ({selectedInstrument}) - {selectedSource.toUpperCase()}
+              {chartDateRange && <span style={{ fontSize: '0.8rem', color: '#7d8590', fontWeight: 'normal' }}> | Data: {chartDateRange}</span>}
             </h3>
             <div style={{ 
               fontSize: '0.8rem', 
@@ -1408,6 +1411,7 @@ function App() {
               source={selectedSource}
               instrument={selectedInstrument}
               onTimeframeChange={setSelectedTimeframe}
+              onDateRangeChange={setChartDateRange}
               tradeSignals={allTrades.filter(trade => trade.action.includes('ENTRY')).map(trade => {
                 // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
                 const parsedDate = new Date(trade.date);
