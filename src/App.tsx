@@ -1102,6 +1102,21 @@ function App() {
               <option value="kraken">Kraken</option>
               <option value="hyperliquid">Hyperliquid</option>
             </select>
+            
+            {selectedSource === 'hyperliquid' && (
+              <div style={{
+                fontSize: '0.75rem',
+                color: '#f0ad4e',
+                backgroundColor: 'rgba(240, 173, 78, 0.1)',
+                padding: '0.5rem',
+                borderRadius: '4px',
+                border: '1px solid rgba(240, 173, 78, 0.3)',
+                marginTop: '0.5rem'
+              }}>
+                ⚠️ <strong>Hyperliquid Notice:</strong> Limited historical data available. For long-term backtesting, 
+                the system will automatically use Binance data as fallback while maintaining Hyperliquid live pricing.
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

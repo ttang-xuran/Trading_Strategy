@@ -1573,10 +1573,18 @@ class LivePriceService {
   }
 
   private async fetchHyperliquidHistoricalRange(startDate: Date, endDate: Date, instrument: string = 'BTC/USD'): Promise<any[]> {
-    // Convert instrument format to Hyperliquid symbol
+    // Convert instrument format to Hyperliquid symbol  
     const symbol = instrument.split('/')[0]
     
-    console.log(`Fetching Hyperliquid ${instrument} data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    // Check if this is a reasonable request for Hyperliquid's limited historical data
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    const maxReasonableDays = 30 // Hyperliquid likely only has recent data
+    
+    console.log(`Fetching Hyperliquid ${instrument} data from ${startDate.toISOString()} to ${endDate.toISOString()} (${daysDiff} days)`)
+    
+    if (daysDiff > maxReasonableDays) {
+      console.warn(`⚠️ Hyperliquid: Requested ${daysDiff} days of data, but Hyperliquid has limited historical data availability. Trying anyway but expect limited results.`)
+    }
     
     try {
       const response = await fetch('https://api.hyperliquid.xyz/info', {
@@ -1588,17 +1596,31 @@ class LivePriceService {
           type: 'candleSnapshot',
           coin: symbol,
           interval: '1d',
-          startTime: startDate.getTime(), // Use milliseconds, not seconds
+          startTime: startDate.getTime(),
           endTime: endDate.getTime()
         })
       })
       
-      if (!response.ok) throw new Error(`Hyperliquid range API failed: ${response.status}`)
+      if (!response.ok) {
+        console.error(`Hyperliquid API HTTP error: ${response.status}`)
+        throw new Error(`Hyperliquid range API failed: ${response.status}`)
+      }
       
       const data = await response.json()
+      console.log(`Hyperliquid API response for ${symbol}:`, data ? `Array with ${Array.isArray(data) ? data.length : 'unknown'} items` : 'null/undefined')
       
-      if (!data || !Array.isArray(data)) {
-        console.warn(`Hyperliquid range data format unexpected:`, typeof data, data)
+      if (!data) {
+        console.warn(`Hyperliquid returned null data for ${symbol}`)
+        return []
+      }
+      
+      if (!Array.isArray(data)) {
+        console.warn(`Hyperliquid data format unexpected for ${symbol}:`, typeof data, data)
+        return []
+      }
+      
+      if (data.length === 0) {
+        console.warn(`⚠️ Hyperliquid returned empty array for ${symbol}. This is expected for historical data beyond their available range.`)
         return []
       }
       
@@ -1606,7 +1628,7 @@ class LivePriceService {
       // Hyperliquid format: { T: close_time_ms, t: open_time_ms, o: open, h: high, l: low, c: close, ... }
       const result = data
         .map((candle: any) => ({
-          date: new Date(candle.t), // Use open time
+          date: new Date(candle.t),
           open: parseFloat(candle.o),
           high: parseFloat(candle.h),
           low: parseFloat(candle.l),
@@ -1622,6 +1644,8 @@ class LivePriceService {
       console.log(`✅ Hyperliquid ${instrument} range fetch: ${result.length} candles`)
       if (result.length > 0) {
         console.log(`First candle: ${result[0].date.toISOString().split('T')[0]}, Last candle: ${result[result.length-1].date.toISOString().split('T')[0]}`)
+      } else {
+        console.log(`ℹ️ No historical data available from Hyperliquid for the requested period. This is normal - Hyperliquid has limited historical data archives.`)
       }
       return result
       
