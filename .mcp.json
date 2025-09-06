@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "browser": {
+      "command": "mcp-server-browser",
+      "args": ["--headless"],
+      "env": {}
+    }
+  }
+}
