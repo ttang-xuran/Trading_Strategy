@@ -127,6 +127,14 @@ const formatCurrency = (num: number): string => {
   return `$${formatNumber(num)}`
 }
 
+// Custom formatter for Average Trade - always show in K format if >= 1000
+const formatTradeValue = (num: number): string => {
+  if (Math.abs(num) >= 1e3) {
+    return `$${(num / 1e3).toFixed(1)}K`
+  }
+  return `$${num.toFixed(2)}`
+}
+
 const PerformanceMetrics: React.FC<Props> = ({ metrics }) => {
   const isPositiveReturn = metrics.total_return_percent > 0
   const isPositiveProfitFactor = metrics.profit_factor > 1
@@ -235,16 +243,16 @@ const PerformanceMetrics: React.FC<Props> = ({ metrics }) => {
           <MetricTitle>Average Trade</MetricTitle>
         </MetricHeader>
         <MetricValue color="var(--accent-orange)">
-          {formatCurrency(metrics.average_trade)}
+          {formatTradeValue(metrics.average_trade)}
         </MetricValue>
         <MetricGrid>
           <MetricSubvalue>
             <span className="label">Avg Winner</span>
-            <span className="value text-green">{formatCurrency(metrics.average_winner)}</span>
+            <span className="value text-green">{formatTradeValue(metrics.average_winner)}</span>
           </MetricSubvalue>
           <MetricSubvalue>
             <span className="label">Avg Loser</span>
-            <span className="value text-red">{formatCurrency(metrics.average_loser)}</span>
+            <span className="value text-red">{formatTradeValue(metrics.average_loser)}</span>
           </MetricSubvalue>
         </MetricGrid>
       </MetricCard>
