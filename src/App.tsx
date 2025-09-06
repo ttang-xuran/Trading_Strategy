@@ -8,6 +8,14 @@ import { livePriceService } from './services/livePriceService'
 import './index.css'
 // Force deployment with complete Bitcoin history support v3 - Fixed backtesting metrics
 
+// Custom formatter for Average Trade - always show in K format if >= 1000
+const formatTradeValue = (num: number): string => {
+  if (Math.abs(num) >= 1e3) {
+    return `${(num / 1e3).toFixed(1)}K`
+  }
+  return `${num.toFixed(2)}`
+}
+
 // Calculate real performance metrics from actual trades
 const calculatePerformanceData = (trades: any[], initialCapital: number = 100000) => {
   if (trades.length === 0) {
@@ -1355,10 +1363,10 @@ function App() {
               💰 Average Trade
             </div>
             <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#fd7e14' }}>
-              ${(performanceData.average_trade / 1000000).toFixed(1)}M
+              ${formatTradeValue(performanceData.average_trade)}
             </div>
             <div style={{ fontSize: '0.8rem', color: '#7d8590' }}>
-              Avg Winner: ${(performanceData.average_winner / 1000).toFixed(1)}K | Avg Loser: ${(performanceData.average_loser / 1000).toFixed(1)}K
+              Avg Winner: ${formatTradeValue(performanceData.average_winner)} | Avg Loser: ${formatTradeValue(performanceData.average_loser)}
             </div>
           </div>
         </div>
