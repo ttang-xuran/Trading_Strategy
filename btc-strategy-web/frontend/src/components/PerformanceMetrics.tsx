@@ -111,9 +111,7 @@ const MetricSubvalue = styled.div`
 
 // Utility function to format numbers
 const formatNumber = (num: number, decimals: number = 2): string => {
-  if (Math.abs(num) >= 1e6) {
-    return (num / 1e6).toFixed(1) + 'M'
-  } else if (Math.abs(num) >= 1e3) {
+  if (Math.abs(num) >= 1e3) {
     return (num / 1e3).toFixed(1) + 'K'
   }
   return num.toFixed(decimals)

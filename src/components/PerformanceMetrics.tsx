@@ -110,11 +110,9 @@ const MetricSubvalue = styled.div`
   }
 `
 
-// Utility function to format numbers
+// Utility function to format numbers - Updated to always use K format for >= 1000
 const formatNumber = (num: number, decimals: number = 2): string => {
-  if (Math.abs(num) >= 1e6) {
-    return (num / 1e6).toFixed(1) + 'M'
-  } else if (Math.abs(num) >= 1e3) {
+  if (Math.abs(num) >= 1e3) {
     return (num / 1e3).toFixed(1) + 'K'
   }
   return num.toFixed(decimals)
