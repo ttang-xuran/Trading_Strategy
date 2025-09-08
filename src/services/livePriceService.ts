@@ -82,7 +82,7 @@ class LivePriceService {
       return this.getLiveBitcoinPrice(preferredSource)
     }
     
-    // Handle ETH and other cryptocurrencies
+    // Handle ETH, SOL, and other cryptocurrencies
     const now = Date.now()
     
     // 1. Check memory cache first (instrument-specific cache key)
@@ -92,7 +92,7 @@ class LivePriceService {
       return this.instrumentCache[cacheKey]
     }
     
-    // 2. Try intelligent fallback chain for ETH
+    // 2. Try intelligent fallback chain for ETH and SOL
     const fallbackChain = this.buildFallbackChain(preferredSource)
     
     for (let i = 0; i < fallbackChain.length; i++) {
@@ -104,7 +104,14 @@ class LivePriceService {
       
       try {
         console.log(`[${symbol}] Trying ${source} (priority ${i + 1})`)
-        const data = await this.fetchEthereumPrice(source)
+        let data
+        if (symbol === 'ETH') {
+          data = await this.fetchEthereumPrice(source)
+        } else if (symbol === 'SOL') {
+          data = await this.fetchSolanaPrice(source)
+        } else {
+          throw new Error(`Unsupported cryptocurrency: ${symbol}`)
+        }
         
         if (this.validatePriceData(data, symbol)) {
           // Cache the result
@@ -678,6 +685,136 @@ class LivePriceService {
   }
 
   /**
+   * Fetch Solana price from different sources
+   */
+  private async fetchSolanaPrice(source: string): Promise<LivePriceData> {
+    switch (source.toLowerCase()) {
+      case 'binance':
+        return this.fetchSolanaFromBinance()
+      case 'coinbase':
+        return this.fetchSolanaFromCoinbase()
+      case 'coingecko':
+        return this.fetchSolanaFromCoinGecko()
+      case 'kraken':
+        return this.fetchSolanaFromKraken()
+      case 'hyperliquid':
+        return this.fetchSolanaFromHyperliquid()
+      default:
+        throw new Error(`Unknown source: ${source}`)
+    }
+  }
+
+  /**
+   * Fetch Solana price from Binance
+   */
+  private async fetchSolanaFromBinance(): Promise<LivePriceData> {
+    const response = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=SOLUSDT')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    
+    const data = await response.json()
+    return {
+      price: parseFloat(data.lastPrice),
+      changePercent24h: parseFloat(data.priceChangePercent),
+      source: 'Binance',
+      timestamp: Date.now(),
+      confidence: 95,
+      isValid: true
+    }
+  }
+
+  /**
+   * Fetch Solana price from Coinbase
+   */
+  private async fetchSolanaFromCoinbase(): Promise<LivePriceData> {
+    const response = await fetch('https://api.coinbase.com/v2/exchange-rates?currency=SOL')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    
+    const data = await response.json()
+    const price = parseFloat(data.data.rates.USD)
+    
+    return {
+      price,
+      changePercent24h: 0, // Coinbase doesn't provide 24h change in this endpoint
+      source: 'Coinbase',
+      timestamp: Date.now(),
+      confidence: 90,
+      isValid: true
+    }
+  }
+
+  /**
+   * Fetch Solana price from CoinGecko
+   */
+  private async fetchSolanaFromCoinGecko(): Promise<LivePriceData> {
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    
+    const data = await response.json()
+    return {
+      price: data.solana.usd,
+      changePercent24h: data.solana.usd_24h_change || 0,
+      source: 'CoinGecko',
+      timestamp: Date.now(),
+      confidence: 85,
+      isValid: true
+    }
+  }
+
+  /**
+   * Fetch Solana price from Kraken
+   */
+  private async fetchSolanaFromKraken(): Promise<LivePriceData> {
+    const response = await fetch('https://api.kraken.com/0/public/Ticker?pair=SOLUSD')
+    if (!response.ok) throw new Error(`Kraken API error: ${response.status}`)
+    
+    const data = await response.json()
+    const solData = data.result.SOLUSD
+    
+    return {
+      price: parseFloat(solData.c[0]), // Last trade closed price
+      changePercent24h: parseFloat(solData.p[1]) / parseFloat(solData.c[0]) * 100, // Calculate % change
+      source: 'Kraken',
+      timestamp: Date.now(),
+      confidence: 88,
+      isValid: true
+    }
+  }
+
+  /**
+   * Fetch Solana price from Hyperliquid
+   */
+  private async fetchSolanaFromHyperliquid(): Promise<LivePriceData> {
+    const response = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'allMids'
+      })
+    })
+    
+    if (!response.ok) throw new Error(`Hyperliquid API error: ${response.status}`)
+    
+    const data = await response.json()
+    
+    // Hyperliquid returns an object with coin names as keys
+    const solPrice = data['SOL']
+    if (!solPrice) {
+      throw new Error('Hyperliquid: No SOL data in response')
+    }
+    
+    return {
+      price: parseFloat(solPrice),
+      changePercent24h: 0, // Hyperliquid doesn't provide 24h change directly
+      source: 'Hyperliquid',
+      timestamp: Date.now(),
+      isValid: true,
+      confidence: 88
+    }
+  }
+
+  /**
    * Enhanced price validation that works for multiple symbols
    */
   private validatePriceData(data: LivePriceData, symbol: string = 'BTC'): boolean {
@@ -686,6 +823,9 @@ class LivePriceService {
     if (symbol === 'ETH') {
       minPrice = 100   // ETH should be between $100 and $50K
       maxPrice = 50000
+    } else if (symbol === 'SOL') {
+      minPrice = 10    // SOL should be between $10 and $2K
+      maxPrice = 2000
     }
     
     if (data.price < minPrice || data.price > maxPrice) {
@@ -720,6 +860,9 @@ class LivePriceService {
     if (symbol === 'ETH') {
       basePrice = 4000 // Realistic ETH price
       symbolName = 'Ethereum'
+    } else if (symbol === 'SOL') {
+      basePrice = 200 // Realistic SOL price
+      symbolName = 'Solana'
     }
     
     const randomVariation = (Math.random() - 0.5) * (basePrice * 0.01) // ±1% variation

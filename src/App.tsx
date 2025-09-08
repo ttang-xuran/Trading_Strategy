@@ -1149,6 +1149,7 @@ function App() {
             >
               <option value="BTC/USD">Bitcoin (BTC/USD)</option>
               <option value="ETH/USD">Ethereum (ETH/USD)</option>
+              <option value="SOL/USD">Solana (SOL/USD)</option>
             </select>
           </div>
           
