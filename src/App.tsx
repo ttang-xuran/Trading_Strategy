@@ -6,7 +6,7 @@ import AuthWrapper from './components/AuthWrapper'
 import LogoutButton from './components/LogoutButton'
 import { livePriceService } from './services/livePriceService'
 import './index.css'
-// Force deployment with complete Bitcoin history support v3 - Fixed backtesting metrics
+// Force deployment with complete Bitcoin history support v4 - Strategy Description tab added
 
 // Custom formatter for Average Trade - always show in K format if >= 1000
 const formatTradeValue = (num: number): string => {
@@ -2030,10 +2030,10 @@ function App() {
                           <strong>Trend Filter:</strong> Fast SMA (50) must be above Slow SMA (250) - confirms uptrend regime
                         </li>
                         <li style={{ marginBottom: '0.5rem' }}>
-                          <strong>Strength Filter:</strong> ADX > threshold (15) indicates trending market
+                          <strong>Strength Filter:</strong> ADX &gt; threshold (15) indicates trending market
                         </li>
                         <li style={{ marginBottom: '0.5rem' }}>
-                          <strong>Noise Filter:</strong> Choppiness Index < threshold (55) avoids sideways markets
+                          <strong>Noise Filter:</strong> Choppiness Index &lt; threshold (55) avoids sideways markets
                         </li>
                         <li style={{ marginBottom: '0.5rem' }}>
                           <strong>Breakout Signal:</strong> Price closes above Donchian Channel (20-period high)
