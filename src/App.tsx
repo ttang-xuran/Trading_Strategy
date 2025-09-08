@@ -170,7 +170,7 @@ function App() {
   const [selectedInstrument, setSelectedInstrument] = useState('BTC/USD')
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>('breakout-long-short')
   const [livePrice, setLivePrice] = useState(initialPrice)
-  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'trades'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'description' | 'performance' | 'trades'>('overview')
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [initialCapital, setInitialCapital] = useState(100000)
@@ -1506,6 +1506,7 @@ function App() {
           }}>
             {[
               { key: 'overview', label: 'Overview' },
+              { key: 'description', label: 'Strategy Description' },
               { key: 'performance', label: 'Performance' }, 
               { key: 'trades', label: 'List of trades' }
             ].map(tab => (
@@ -1914,6 +1915,217 @@ function App() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'description' && (
+              <div>
+                <h3 style={{ marginBottom: '2rem', color: '#f0f6fc' }}>
+                  {tradingStrategies[selectedStrategy].name} - Strategy Description
+                </h3>
+                
+                {selectedStrategy === 'breakout-long-short' && (
+                  <div style={{ color: '#c9d1d9', lineHeight: '1.6' }}>
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Strategy Overview</h4>
+                      <p style={{ marginBottom: '1rem' }}>
+                        The Adaptive Volatility Breakout strategy is designed to capture significant price movements in both directions. 
+                        It dynamically adjusts to market volatility and can trade both long and short positions, making it suitable for 
+                        trending and ranging markets.
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Entry Rules</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Long Entry:</strong> Price breaks above the upper boundary (highest high of lookback period + range multiplier × ATR)
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Short Entry:</strong> Price breaks below the lower boundary (lowest low of lookback period - range multiplier × ATR)
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Reversal Capability:</strong> Can switch from long to short or vice versa based on breakout signals
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Exit Rules</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Stop Loss:</strong> ATR-based stop loss (Stop Loss Multiplier × ATR from entry price)
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Reversal Exit:</strong> Exit current position when opposite breakout signal occurs
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Dynamic Adjustment:</strong> Stop loss and boundaries adapt to changing volatility
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Key Parameters</h4>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                        gap: '1rem' 
+                      }}>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Lookback Period (20)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Time window for calculating breakout boundaries and volatility</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Range Multiplier (0.5)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Sensitivity of breakout boundaries relative to ATR</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Stop Loss Multiplier (2.5)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Risk management - distance of stop loss from entry</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>ATR Period (14)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Period for calculating Average True Range (volatility measure)</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Market Conditions</h4>
+                      <div style={{ 
+                        backgroundColor: '#0d1117', 
+                        padding: '1rem', 
+                        borderRadius: '6px', 
+                        border: '1px solid #21262d' 
+                      }}>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#56d364' }}>Best Performance:</strong> Strong trending markets with clear directional moves
+                        </p>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#f85149' }}>Challenging Conditions:</strong> Sideways/choppy markets with frequent false breakouts
+                        </p>
+                        <p>
+                          <strong style={{ color: '#d2a8ff' }}>Risk Management:</strong> Dynamic ATR-based stops help adapt to volatility changes
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedStrategy === 'trend-following' && (
+                  <div style={{ color: '#c9d1d9', lineHeight: '1.6' }}>
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Strategy Overview</h4>
+                      <p style={{ marginBottom: '1rem' }}>
+                        A sophisticated long-only trend following strategy that combines multiple technical indicators to identify and ride 
+                        strong uptrends. Uses regime filtering and strength confirmation to avoid false signals in choppy markets.
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Entry Rules</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Trend Filter:</strong> Fast SMA (50) must be above Slow SMA (250) - confirms uptrend regime
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Strength Filter:</strong> ADX > threshold (15) indicates trending market
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Noise Filter:</strong> Choppiness Index < threshold (55) avoids sideways markets
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Breakout Signal:</strong> Price closes above Donchian Channel (20-period high)
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Exit Rules</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>ATR Trailing Stop:</strong> Dynamic stop loss at 5.0 × ATR below current price
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Trend Reversal:</strong> Exit if fast SMA crosses below slow SMA
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Adaptive Stops:</strong> Stop distance adjusts with volatility changes
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Key Parameters</h4>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                        gap: '1rem' 
+                      }}>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>SMA Fast/Slow (50/250)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Moving averages for trend regime identification</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Donchian Length (20)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Period for breakout channel calculation</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>ATR Multiplier (5.0)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Trailing stop distance as multiple of ATR</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>ADX/Chop Thresholds</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Filters to avoid low-quality market conditions</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Market Conditions</h4>
+                      <div style={{ 
+                        backgroundColor: '#0d1117', 
+                        padding: '1rem', 
+                        borderRadius: '6px', 
+                        border: '1px solid #21262d' 
+                      }}>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#56d364' }}>Best Performance:</strong> Strong, sustained uptrends with low noise
+                        </p>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#f85149' }}>Challenging Conditions:</strong> Bear markets and high-frequency oscillations
+                        </p>
+                        <p>
+                          <strong style={{ color: '#d2a8ff' }}>Risk Management:</strong> Multiple filters reduce false signals and drawdowns
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(selectedStrategy === 'mean-reversion' || selectedStrategy === 'momentum') && (
+                  <div style={{ color: '#c9d1d9', lineHeight: '1.6' }}>
+                    <div style={{ 
+                      backgroundColor: '#0d1117', 
+                      padding: '2rem', 
+                      borderRadius: '6px', 
+                      border: '1px solid #21262d',
+                      textAlign: 'center'
+                    }}>
+                      <h4 style={{ color: '#f85149', marginBottom: '1rem', fontSize: '1.2rem' }}>
+                        🚧 Strategy Under Development
+                      </h4>
+                      <p style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
+                        {tradingStrategies[selectedStrategy].description}
+                      </p>
+                      <p style={{ color: '#7d8590' }}>
+                        This strategy is currently being developed and will be available in a future update. 
+                        Please select "Breakout for long and short" or "Trend Following" to test implemented strategies.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
