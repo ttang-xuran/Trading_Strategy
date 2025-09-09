@@ -152,7 +152,7 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
       adxLen: 14,
       adxTh: 15.0,
       atrLen: 14,
-      riskPercent: 5.0
+      riskPerTrade: 5.0
     }
   },
   'mean-reversion': {
@@ -877,11 +877,27 @@ function App() {
           // Calculate position size based on risk management
           const stopDistance = atr * atrMult
           const riskAmount = equity * (riskPerTrade / 100)
+          
+          // Safety check to prevent division by zero or invalid calculations
+          if (stopDistance <= 0 || riskAmount <= 0 || !isFinite(stopDistance) || !isFinite(riskAmount)) {
+            console.warn(`Invalid risk calculation: stopDistance=${stopDistance}, riskAmount=${riskAmount}`)
+            continue
+          }
+          
           const calculatedSize = riskAmount / stopDistance
+          
+          // Additional safety check for position size
+          if (!isFinite(calculatedSize) || calculatedSize <= 0) {
+            console.warn(`Invalid position size: ${calculatedSize}`)
+            continue
+          }
+          
+          // Use next bar open (or current close if last bar)
+          const entryPrice = (i + 1 < ohlcData.length) ? ohlcData[i + 1].open : candle.close
           
           pendingEntry = {
             type: 'LONG',
-            price: candle.open, // Next bar open
+            price: entryPrice,
             stopPrice: candle.close - stopDistance,
             size: calculatedSize
           }
@@ -890,11 +906,27 @@ function App() {
         else if (candle.close < donLow) {
           const stopDistance = atr * atrMult
           const riskAmount = equity * (riskPerTrade / 100)
+          
+          // Safety check to prevent division by zero or invalid calculations
+          if (stopDistance <= 0 || riskAmount <= 0 || !isFinite(stopDistance) || !isFinite(riskAmount)) {
+            console.warn(`Invalid risk calculation: stopDistance=${stopDistance}, riskAmount=${riskAmount}`)
+            continue
+          }
+          
           const calculatedSize = riskAmount / stopDistance
+          
+          // Additional safety check for position size
+          if (!isFinite(calculatedSize) || calculatedSize <= 0) {
+            console.warn(`Invalid position size: ${calculatedSize}`)
+            continue
+          }
+          
+          // Use next bar open (or current close if last bar)
+          const entryPrice = (i + 1 < ohlcData.length) ? ohlcData[i + 1].open : candle.close
           
           pendingEntry = {
             type: 'SHORT',
-            price: candle.open, // Next bar open
+            price: entryPrice,
             stopPrice: candle.close + stopDistance,
             size: calculatedSize
           }
@@ -904,13 +936,15 @@ function App() {
       // STEP 5: Check for exit signals (Donchian reversal)
       if (position && !pendingExit) {
         if (position === 'LONG' && candle.close < donLow) {
+          const exitPrice = (i + 1 < ohlcData.length) ? ohlcData[i + 1].open : candle.close
           pendingExit = {
-            price: candle.open, // Next bar open
+            price: exitPrice,
             reason: 'Donchian Exit'
           }
         } else if (position === 'SHORT' && candle.close > donHigh) {
+          const exitPrice = (i + 1 < ohlcData.length) ? ohlcData[i + 1].open : candle.close
           pendingExit = {
-            price: candle.open, // Next bar open
+            price: exitPrice,
             reason: 'Donchian Exit'
           }
         }
