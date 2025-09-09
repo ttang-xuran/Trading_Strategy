@@ -103,7 +103,7 @@ const initialPrice = {
 }
 
 // Trading strategy definitions
-type StrategyType = 'breakout-long-short' | 'trend-following' | 'mean-reversion' | 'momentum'
+type StrategyType = 'breakout-long-short' | 'trend-following' | 'trend-following-risk-mgt' | 'mean-reversion' | 'momentum'
 
 interface TradingStrategy {
   id: StrategyType
@@ -138,6 +138,21 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
       chopLen: 14,
       chopTh: 55.0,
       atrLen: 14
+    }
+  },
+  'trend-following-risk-mgt': {
+    id: 'trend-following-risk-mgt',
+    name: 'Trend Following with Risk MGT',
+    description: 'Advanced trend following with sophisticated risk management, dynamic position sizing, and optimized parameters for Bitcoin trading',
+    parameters: {
+      smaFastLen: 50,
+      smaSlowLen: 250,
+      donLen: 40,
+      atrMult: 9.0,
+      adxLen: 14,
+      adxTh: 15.0,
+      atrLen: 14,
+      riskPercent: 5.0
     }
   },
   'mean-reversion': {
@@ -1888,6 +1903,211 @@ function App() {
                         </>
                       )}
 
+                      {selectedStrategy === 'trend-following-risk-mgt' && (
+                        <>
+                          {/* SMA Fast Length */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              SMA Fast Length: {userParameters.smaFastLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="100"
+                              value={userParameters.smaFastLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                smaFastLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-100 (Default: 50)
+                            </div>
+                          </div>
+
+                          {/* SMA Slow Length */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              SMA Slow Length: {userParameters.smaSlowLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="100"
+                              max="500"
+                              value={userParameters.smaSlowLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                smaSlowLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 100-500 (Default: 250)
+                            </div>
+                          </div>
+
+                          {/* Donchian Length */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Donchian Length: {userParameters.donLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="80"
+                              value={userParameters.donLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                donLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-80 (Default: 40) - Optimized for reduced false signals
+                            </div>
+                          </div>
+
+                          {/* ATR Multiplier */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ATR Multiplier: {userParameters.atrMult}
+                            </label>
+                            <input
+                              type="range"
+                              min="2"
+                              max="15"
+                              step="0.5"
+                              value={userParameters.atrMult}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                atrMult: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 2-15 (Default: 9.0) - Optimized for crypto volatility
+                            </div>
+                          </div>
+
+                          {/* ADX Threshold */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ADX Threshold: {userParameters.adxTh}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="50"
+                              step="1"
+                              value={userParameters.adxTh}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                adxTh: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-50 (Default: 15) - Trend strength filter
+                            </div>
+                          </div>
+
+                          {/* Risk Percent */}
+                          <div>
+                            <label style={{ 
+                              display: 'block', 
+                              fontSize: '0.9rem', 
+                              color: '#f0f6fc', 
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Risk Per Trade %: {userParameters.riskPercent}
+                            </label>
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="20"
+                              step="0.5"
+                              value={userParameters.riskPercent}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                riskPercent: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 0.5-20% (Default: 5.0%) - Professional risk management
+                            </div>
+                          </div>
+                        </>
+                      )}
+
                       {/* Reset to Defaults Button */}
                       <button
                         onClick={() => setUserParameters(tradingStrategies[selectedStrategy].parameters)}
@@ -2098,6 +2318,104 @@ function App() {
                         </p>
                         <p>
                           <strong style={{ color: '#d2a8ff' }}>Risk Management:</strong> Multiple filters reduce false signals and drawdowns
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedStrategy === 'trend-following-risk-mgt' && (
+                  <div style={{ color: '#c9d1d9', lineHeight: '1.6' }}>
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Strategy Overview</h4>
+                      <p style={{ marginBottom: '1rem' }}>
+                        The "Robust Trend Strategy v3" represents the evolution of trend following with institutional-grade risk management. 
+                        This advanced strategy combines proven trend-following methodologies with sophisticated position sizing and risk controls, 
+                        optimized specifically for Bitcoin trading from 2014 onwards.
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Entry Rules</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Regime Filter:</strong> Close &gt; Slow SMA (250) AND Fast SMA (50) &gt; Slow SMA (250) - confirms bullish regime
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Trend Strength:</strong> ADX &gt; 15.0 indicates sufficient trending momentum (simplified from original)
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Breakout Signal:</strong> Price closes above 40-period Donchian high (optimized from 20 to reduce false signals)
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Risk-Based Entry:</strong> Position size calculated dynamically based on 5% portfolio risk per trade
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Revolutionary Risk Management</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Dynamic Position Sizing:</strong> Each trade risks exactly 5% of current equity, not fixed amounts
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Initial Stop Loss:</strong> 2 × ATR from entry price for position size calculation
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>ATR Trailing Stop:</strong> Wide 9.0 × ATR trailing stop (vs. 5.0) optimized for crypto volatility
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Dual Exit System:</strong> Exit on trailing stop OR trend reversal (close &lt; Fast SMA)
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Key Parameters & Optimizations</h4>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+                        gap: '1rem' 
+                      }}>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Extended Donchian (40)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Doubled from 20 to 40 periods - dramatically reduces false breakout signals while capturing major trends</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Wide ATR Stops (9.0x)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Increased from 5.0x to 9.0x ATR - gives Bitcoin's volatility room to breathe</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Risk-Based Sizing (5%)</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Professional risk management - each trade risks exactly 5% of portfolio regardless of market conditions</p>
+                        </div>
+                        <div style={{ backgroundColor: '#161b22', padding: '1rem', borderRadius: '6px', border: '1px solid #30363d' }}>
+                          <h5 style={{ color: '#f0f6fc', marginBottom: '0.5rem' }}>Simplified Filters</h5>
+                          <p style={{ fontSize: '0.9rem' }}>Removed Choppiness Index - streamlined approach focuses on ADX strength only</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Strategy Evolution</h4>
+                      <div style={{ 
+                        backgroundColor: '#0d1117', 
+                        padding: '1rem', 
+                        borderRadius: '6px', 
+                        border: '1px solid #21262d' 
+                      }}>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#56d364' }}>Enhanced Performance:</strong> 11+ year backtest (2014-2025) vs. original 5-year period
+                        </p>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#58a6ff' }}>Professional Approach:</strong> Fixed 5% risk per trade replaces 100% equity all-in strategy
+                        </p>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#d2a8ff' }}>Optimized Parameters:</strong> Longer Donchian + wider stops = fewer but higher-quality trades
+                        </p>
+                        <p>
+                          <strong style={{ color: '#f85149' }}>Institutional Grade:</strong> Suitable for serious capital management and professional trading
                         </p>
                       </div>
                     </div>
