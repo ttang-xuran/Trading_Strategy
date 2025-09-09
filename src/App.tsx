@@ -1690,7 +1690,7 @@ function App() {
                     date: isoDate,
                     type: trade.action.includes('ENTRY') ? 
                       (trade.action.includes('LONG') ? 'BUY' : 'SELL') :
-                      (trade.action.includes('LONG') ? 'SELL' : 'BUY'),
+                      'CLOSE',
                     price: trade.price,
                     reason: trade.comment || 'Strategy Signal'
                   };

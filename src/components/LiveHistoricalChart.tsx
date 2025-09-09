@@ -12,7 +12,7 @@ interface CandleData {
 
 interface TradeSignal {
   date: string
-  type: 'BUY' | 'SELL'
+  type: 'BUY' | 'SELL' | 'CLOSE'
   price: number
   reason: string
 }
@@ -554,7 +554,7 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       const y = padding + chartHeight - ((signal.price - minPrice) / priceRange) * chartHeight
 
       // Draw signal marker
-      ctx.fillStyle = signal.type === 'BUY' ? '#238636' : '#da3633'
+      ctx.fillStyle = signal.type === 'BUY' ? '#238636' : (signal.type === 'CLOSE' ? '#fd7e14' : '#da3633')
       ctx.beginPath()
       if (signal.type === 'BUY') {
         ctx.moveTo(x, y + 15)
