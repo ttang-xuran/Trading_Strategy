@@ -1671,7 +1671,18 @@ function App() {
               onTimeframeChange={setSelectedTimeframe}
               onDateRangeChange={setChartDateRange}
               tradeSignals={(() => {
-                const signals = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('EXIT')).map(trade => {
+                console.log(`🎯 ALL TRADES DEBUG: ${allTrades.length} total trades:`);
+                allTrades.slice(0, 4).forEach((trade, i) => {
+                  console.log(`🎯   Trade ${i+1}: action="${trade.action}", date="${trade.date}", price=${trade.price}`);
+                });
+                
+                const filteredTrades = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('EXIT'));
+                console.log(`🎯 FILTERED TRADES: ${filteredTrades.length} trades after filter`);
+                filteredTrades.slice(0, 4).forEach((trade, i) => {
+                  console.log(`🎯   Filtered ${i+1}: action="${trade.action}"`);
+                });
+                
+                const signals = filteredTrades.map(trade => {
                   // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
                   const parsedDate = new Date(trade.date);
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
