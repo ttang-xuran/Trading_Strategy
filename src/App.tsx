@@ -64,6 +64,10 @@ const calculatePerformanceData = (trades: any[], initialCapital: number = 100000
   const winningTrades = closingTrades.filter(trade => trade.pnl > 0).length
   const losingTrades = closingTrades.filter(trade => trade.pnl < 0).length
   
+  // DEBUG: Log win rate calculation details
+  console.log(`🔍 WIN RATE DEBUG: Total trades: ${trades.length}, Closing trades: ${closingTrades.length}, Winners: ${winningTrades}, Losers: ${losingTrades}`)
+  console.log(`🔍 WIN RATE DEBUG: Calculation: (${winningTrades} / ${closingTrades.length}) * 100 = ${closingTrades.length > 0 ? (winningTrades / closingTrades.length) * 100 : 0}%`)
+  
   // FIXED: Only count entry trades, not all trades with LONG/SHORT in name
   const longTrades = trades.filter(trade => trade.action === 'ENTRY LONG').length
   const shortTrades = trades.filter(trade => trade.action === 'ENTRY SHORT').length
