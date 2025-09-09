@@ -802,13 +802,13 @@ function App() {
         equity = positionSize * entryPrice
         
         trades.push({
-          type: 'BUY',
           date: candle.date,
+          action: type === 'LONG' ? 'ENTRY LONG' : 'ENTRY SHORT',
           price: entryPrice,
-          quantity: positionSize,
-          signal: type === 'LONG' ? 'Long Entry' : 'Short Entry',
+          size: positionSize,
           pnl: 0,
-          equity: equity
+          equity: equity,
+          comment: `${type === 'LONG' ? 'Long' : 'Short'} Entry (Risk: ${riskPerTrade}%)`
         })
         
         console.log(`${candle.date}: ${type} entry at $${entryPrice.toFixed(2)}, size: ${positionSize.toFixed(8)}, stop: $${stopLoss.toFixed(2)}`)
@@ -825,13 +825,13 @@ function App() {
         equity += pnl
         
         trades.push({
-          type: 'SELL',
           date: candle.date,
+          action: position === 'LONG' ? 'CLOSE LONG' : 'CLOSE SHORT',
           price: exitPrice,
-          quantity: positionSize,
-          signal: reason,
+          size: positionSize,
           pnl: pnl,
-          equity: equity
+          equity: equity,
+          comment: reason
         })
         
         console.log(`${candle.date}: ${position} exit at $${exitPrice.toFixed(2)}, PnL: $${pnl.toFixed(2)}, reason: ${reason}`)
@@ -962,13 +962,13 @@ function App() {
       equity += pnl
       
       trades.push({
-        type: 'SELL',
         date: lastCandle.date,
+        action: position === 'LONG' ? 'CLOSE LONG' : 'CLOSE SHORT',
         price: exitPrice,
-        quantity: positionSize,
-        signal: 'End of Data',
+        size: positionSize,
         pnl: pnl,
-        equity: equity
+        equity: equity,
+        comment: 'End of Data'
       })
     }
     
