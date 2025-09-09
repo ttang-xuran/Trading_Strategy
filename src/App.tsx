@@ -720,6 +720,231 @@ function App() {
     }
   }
 
+  // Trend Following with Risk Management strategy implementation
+  const generateTrendFollowingRiskMgtTrades = async (ohlcData: any[], parameters: any, equity: number, capital: number) => {
+    const { donLen, atrMult, riskPerTrade } = parameters
+    console.log(`Using trend following risk mgt parameters: donLen=${donLen}, atrMult=${atrMult}, risk=${riskPerTrade}%`)
+    
+    let position = null  // 'LONG', 'SHORT', or null
+    let entryPrice = 0
+    let positionSize = 0
+    let stopLoss = 0
+    let pendingEntry = null // For next-bar execution
+    let pendingExit = null // For next-bar exit execution
+    const trades = []
+    
+    // Technical indicator calculation helpers
+    const calculateATR = (data: any[], period: number, index: number) => {
+      if (index < 1) return null
+      if (index < period) {
+        const startIndex = Math.max(1, index - period + 1)
+        let sum = 0
+        let count = 0
+        for (let i = startIndex; i <= index; i++) {
+          const current = data[i]
+          const previous = data[i - 1]
+          const tr = Math.max(
+            current.high - current.low,
+            Math.abs(current.high - previous.close),
+            Math.abs(current.low - previous.close)
+          )
+          sum += tr
+          count++
+        }
+        return sum / count
+      }
+      
+      const current = data[index]
+      const previous = data[index - 1]
+      const currentTR = Math.max(
+        current.high - current.low,
+        Math.abs(current.high - previous.close),
+        Math.abs(current.low - previous.close)
+      )
+      
+      const previousATR = calculateATR(data, period, index - 1)
+      if (previousATR === null) return null
+      
+      return (previousATR * (period - 1) + currentTR) / period
+    }
+    
+    const getDonchianHigh = (data: any[], period: number, index: number) => {
+      if (index < period) return null
+      let highest = data[index - period].high
+      for (let i = index - period + 1; i <= index - 1; i++) {
+        highest = Math.max(highest, data[i].high)
+      }
+      return highest
+    }
+    
+    const getDonchianLow = (data: any[], period: number, index: number) => {
+      if (index < period) return null
+      let lowest = data[index - period].low
+      for (let i = index - period + 1; i <= index - 1; i++) {
+        lowest = Math.min(lowest, data[i].low)
+      }
+      return lowest
+    }
+    
+    // Process each day - EXACT Pine Script execution model
+    for (let i = 0; i < ohlcData.length; i++) {
+      const candle = ohlcData[i]
+      
+      // STEP 1: Handle pending entry/exit from previous bar (ON OPEN)
+      if (pendingEntry) {
+        const { type, price, stopPrice, size } = pendingEntry
+        position = type
+        entryPrice = price
+        stopLoss = stopPrice
+        positionSize = size
+        
+        // Calculate equity based on position size and entry price
+        equity = positionSize * entryPrice
+        
+        trades.push({
+          type: 'BUY',
+          date: candle.date,
+          price: entryPrice,
+          quantity: positionSize,
+          signal: type === 'LONG' ? 'Long Entry' : 'Short Entry',
+          pnl: 0,
+          equity: equity
+        })
+        
+        console.log(`${candle.date}: ${type} entry at $${entryPrice.toFixed(2)}, size: ${positionSize.toFixed(8)}, stop: $${stopLoss.toFixed(2)}`)
+        pendingEntry = null
+      }
+      
+      if (pendingExit) {
+        const { price, reason } = pendingExit
+        const exitPrice = price
+        const pnl = position === 'LONG' 
+          ? (exitPrice - entryPrice) * positionSize
+          : (entryPrice - exitPrice) * positionSize
+        
+        equity += pnl
+        
+        trades.push({
+          type: 'SELL',
+          date: candle.date,
+          price: exitPrice,
+          quantity: positionSize,
+          signal: reason,
+          pnl: pnl,
+          equity: equity
+        })
+        
+        console.log(`${candle.date}: ${position} exit at $${exitPrice.toFixed(2)}, PnL: $${pnl.toFixed(2)}, reason: ${reason}`)
+        
+        position = null
+        entryPrice = 0
+        positionSize = 0
+        stopLoss = 0
+        pendingExit = null
+      }
+      
+      // STEP 2: Calculate indicators
+      const atr = calculateATR(ohlcData, 14, i)
+      const donHigh = getDonchianHigh(ohlcData, donLen, i)
+      const donLow = getDonchianLow(ohlcData, donLen, i)
+      
+      // Skip if indicators not ready
+      if (!atr || !donHigh || !donLow) continue
+      
+      // STEP 3: Check for stop loss hits during the bar
+      if (position && stopLoss > 0) {
+        let stopHit = false
+        let exitPrice = stopLoss
+        
+        if (position === 'LONG' && candle.low <= stopLoss) {
+          stopHit = true
+        } else if (position === 'SHORT' && candle.high >= stopLoss) {
+          stopHit = true
+        }
+        
+        if (stopHit) {
+          pendingExit = {
+            price: exitPrice,
+            reason: 'Stop Loss'
+          }
+        }
+      }
+      
+      // STEP 4: Check for new entry signals (only if not in position and no pending exit)
+      if (!position && !pendingExit) {
+        // Long entry: Close breaks above Donchian High
+        if (candle.close > donHigh) {
+          // Calculate position size based on risk management
+          const stopDistance = atr * atrMult
+          const riskAmount = equity * (riskPerTrade / 100)
+          const calculatedSize = riskAmount / stopDistance
+          
+          pendingEntry = {
+            type: 'LONG',
+            price: candle.open, // Next bar open
+            stopPrice: candle.close - stopDistance,
+            size: calculatedSize
+          }
+        }
+        // Short entry: Close breaks below Donchian Low
+        else if (candle.close < donLow) {
+          const stopDistance = atr * atrMult
+          const riskAmount = equity * (riskPerTrade / 100)
+          const calculatedSize = riskAmount / stopDistance
+          
+          pendingEntry = {
+            type: 'SHORT',
+            price: candle.open, // Next bar open
+            stopPrice: candle.close + stopDistance,
+            size: calculatedSize
+          }
+        }
+      }
+      
+      // STEP 5: Check for exit signals (Donchian reversal)
+      if (position && !pendingExit) {
+        if (position === 'LONG' && candle.close < donLow) {
+          pendingExit = {
+            price: candle.open, // Next bar open
+            reason: 'Donchian Exit'
+          }
+        } else if (position === 'SHORT' && candle.close > donHigh) {
+          pendingExit = {
+            price: candle.open, // Next bar open
+            reason: 'Donchian Exit'
+          }
+        }
+      }
+    }
+    
+    // Handle any remaining open position at the end
+    if (position && ohlcData.length > 0) {
+      const lastCandle = ohlcData[ohlcData.length - 1]
+      const exitPrice = lastCandle.close
+      const pnl = position === 'LONG' 
+        ? (exitPrice - entryPrice) * positionSize
+        : (entryPrice - exitPrice) * positionSize
+      
+      equity += pnl
+      
+      trades.push({
+        type: 'SELL',
+        date: lastCandle.date,
+        price: exitPrice,
+        quantity: positionSize,
+        signal: 'End of Data',
+        pnl: pnl,
+        equity: equity
+      })
+    }
+    
+    console.log(`Generated ${trades.length} trend following risk mgt trades from ${ohlcData.length} bars`)
+    return {
+      trades: trades.reverse(), // Most recent first
+      historicalDataCount: ohlcData.length
+    }
+  }
+
   const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '5Y', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', instrument: string = 'BTC/USD', customParameters?: any) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
@@ -731,8 +956,8 @@ function App() {
       }
       
       // Only allow implemented strategies
-      if (strategyType !== 'breakout-long-short' && strategyType !== 'trend-following') {
-        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently available: "Breakout for long and short" and "Trend Following".`)
+      if (strategyType !== 'breakout-long-short' && strategyType !== 'trend-following' && strategyType !== 'trend-following-risk-mgt') {
+        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently available: "Breakout for long and short", "Trend Following", and "Trend Following with Risk MGT".`)
       }
       
       // Get REAL historical OHLC data from the selected exchange for the selected timeframe
@@ -760,6 +985,8 @@ function App() {
         return await generateBreakoutTrades(ohlcData, parameters, equity, capital)
       } else if (strategyType === 'trend-following') {
         return await generateTrendFollowingTrades(ohlcData, parameters, equity, capital)
+      } else if (strategyType === 'trend-following-risk-mgt') {
+        return await generateTrendFollowingRiskMgtTrades(ohlcData, parameters, equity, capital)
       }
       
     } catch (error) {
@@ -1192,12 +1419,12 @@ function App() {
                 <option 
                   key={strategy.id} 
                   value={strategy.id}
-                  disabled={strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following'}
+                  disabled={strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt'}
                   style={{
-                    color: (strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following') ? '#999' : 'black'
+                    color: (strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt') ? '#999' : 'black'
                   }}
                 >
-                  {strategy.name} {(strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following') ? '(Coming Soon)' : ''}
+                  {strategy.name} {(strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt') ? '(Coming Soon)' : ''}
                 </option>
               ))}
             </select>
