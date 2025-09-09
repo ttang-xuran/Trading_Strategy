@@ -1670,19 +1670,24 @@ function App() {
               instrument={selectedInstrument}
               onTimeframeChange={setSelectedTimeframe}
               onDateRangeChange={setChartDateRange}
-              tradeSignals={allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('EXIT')).map(trade => {
-                // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
-                const parsedDate = new Date(trade.date);
-                const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
-                return {
-                  date: isoDate,
-                  type: trade.action.includes('ENTRY') ? 
-                    (trade.action.includes('LONG') ? 'BUY' : 'SELL') :
-                    (trade.action.includes('LONG') ? 'SELL' : 'BUY'),
-                  price: trade.price,
-                  reason: trade.comment || 'Strategy Signal'
-                };
-              })} 
+              tradeSignals={(() => {
+                const signals = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('EXIT')).map(trade => {
+                  // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
+                  const parsedDate = new Date(trade.date);
+                  const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
+                  return {
+                    date: isoDate,
+                    type: trade.action.includes('ENTRY') ? 
+                      (trade.action.includes('LONG') ? 'BUY' : 'SELL') :
+                      (trade.action.includes('LONG') ? 'SELL' : 'BUY'),
+                    price: trade.price,
+                    reason: trade.comment || 'Strategy Signal'
+                  };
+                });
+                console.log(`🎯 TRADE SIGNALS DEBUG: Generated ${signals.length} signals from ${allTrades.length} trades`);
+                console.log('🎯 Sample signals:', signals.slice(0, 3));
+                return signals;
+              })()} 
             />
             
             {/* Live Price Overlay */}
