@@ -1676,7 +1676,7 @@ function App() {
                   console.log(`🎯   Trade ${i+1}: action="${trade.action}", date="${trade.date}", price=${trade.price}`);
                 });
                 
-                const filteredTrades = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('EXIT'));
+                const filteredTrades = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('CLOSE'));
                 console.log(`🎯 FILTERED TRADES: ${filteredTrades.length} trades after filter`);
                 filteredTrades.slice(0, 4).forEach((trade, i) => {
                   console.log(`🎯   Filtered ${i+1}: action="${trade.action}"`);
