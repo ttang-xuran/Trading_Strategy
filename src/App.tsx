@@ -1543,7 +1543,7 @@ function App() {
               +{performanceData.win_rate_percent.toFixed(2)}%
             </div>
             <div style={{ fontSize: '0.8rem', color: '#7d8590' }}>
-              {performanceData.winning_trades} / {performanceData.winning_trades + performanceData.losing_trades} trades
+              {performanceData.winning_trades} / {(performanceData.total_trades / 2)} trade pairs
             </div>
           </div>
 
