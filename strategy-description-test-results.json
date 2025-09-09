@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-09-08T22:11:25.418Z",
+  "url": "https://trading-strategy-6yvqk2zo2-tonys-projects-297706df.vercel.app/",
+  "pageSize": 648,
+  "tests": {
+    "tabStructure": {
+      "passed": false,
+      "expected": [
+        "Overview",
+        "Strategy Description",
+        "Performance",
+        "List of trades"
+      ],
+      "found": []
+    },
+    "strategyContent": {
+      "patterns": [
+        "Strategy Overview",
+        "Entry.*Exit.*Rules",
+        "Key Parameters",
+        "Market Conditions",
+        "tradingStrategies",
+        "Breakout for long and short",
+        "Trend Following"
+      ],
+      "found": []
+    },
+    "tabLogic": {
+      "patterns": [
+        "activeTab.*===.*description",
+        "setActiveTab",
+        "onClick.*description",
+        "selectedStrategy"
+      ],
+      "found": []
+    },
+    "strategies": {
+      "expected": [
+        "Breakout for long and short",
+        "Trend Following",
+        "Mean Reversion",
+        "Momentum"
+      ],
+      "found": []
+    },
+    "devMessages": []
+  },
+  "overallSuccess": false
+}

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Strategy Description Tab Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #f0f6fc; }
+        iframe { width: 100%; height: 900px; border: 1px solid #444; }
+        .results { margin-top: 20px; padding: 10px; background: #2d3748; border-radius: 5px; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+        .info { color: #74c0fc; }
+        .warning { color: #ffd43b; }
+        button { background: #0366d6; color: white; padding: 8px 16px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0256cc; }
+    </style>
+</head>
+<body>
+    <h1>Strategy Description Tab Test</h1>
+    <p>Testing the new Strategy Description tab functionality on the trading strategy application.</p>
+    
+    <div style="margin: 10px 0;">
+        <button onclick="performLoginTest()">Test Login Process</button>
+        <button onclick="testTabStructure()">Test Tab Structure</button>
+        <button onclick="testStrategyDescriptionTab()">Test Strategy Description Tab</button>
+        <button onclick="testStrategySwitch()">Test Strategy Switching</button>
+        <button onclick="takeScreenshots()">Take Screenshots</button>
+    </div>
+    
+    <iframe id="app-iframe" src="https://trading-strategy-6yvqk2zo2-tonys-projects-297706df.vercel.app/"></iframe>
+    
+    <div class="results" id="results">
+        <p class="info">Ready to test. Click buttons above to run specific tests.</p>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const p = document.createElement('p');
+            p.className = type;
+            p.innerHTML = new Date().toLocaleTimeString() + ' - ' + message;
+            results.appendChild(p);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('results').innerHTML = '<p class="info">Log cleared.</p>';
+        }
+
+        async function performLoginTest() {
+            log('🔐 Starting login test...', 'info');
+            const iframe = document.getElementById('app-iframe');
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const bodyText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                
+                // Check if login form is present
+                const hasLoginForm = bodyText.includes('Username') || bodyText.includes('Password') || bodyText.includes('Login');
+                log('Login form detected: ' + hasLoginForm, hasLoginForm ? 'success' : 'warning');
+                
+                // Look for username and password fields
+                const usernameField = iframeDoc.querySelector('input[type="text"], input[placeholder*="username" i]');
+                const passwordField = iframeDoc.querySelector('input[type="password"]');
+                const loginButton = iframeDoc.querySelector('button[type="submit"], button:contains("Login")');
+                
+                if (usernameField && passwordField) {
+                    log('Found login fields, attempting to fill credentials...', 'info');
+                    usernameField.value = 'tony';
+                    passwordField.value = '123';
+                    
+                    if (loginButton) {
+                        log('Clicking login button...', 'info');
+                        loginButton.click();
+                        
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        
+                        // Check if login was successful
+                        const newBodyText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                        const isLoggedIn = newBodyText.includes('Signed in') || newBodyText.includes('Sign Out') || newBodyText.includes('tony');
+                        log('Login successful: ' + isLoggedIn, isLoggedIn ? 'success' : 'error');
+                        
+                        if (isLoggedIn) {
+                            log('✅ Login test completed successfully', 'success');
+                        } else {
+                            log('❌ Login test failed - not logged in', 'error');
+                        }
+                    } else {
+                        log('❌ Login button not found', 'error');
+                    }
+                } else {
+                    log('❌ Login fields not found', 'error');
+                }
+                
+            } catch (error) {
+                log('❌ Error during login test: ' + error.message, 'error');
+                log('This might be due to CORS restrictions', 'warning');
+            }
+        }
+
+        async function testTabStructure() {
+            log('📋 Testing tab structure...', 'info');
+            const iframe = document.getElementById('app-iframe');
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                const bodyText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                
+                // Check for all expected tabs
+                const expectedTabs = ['Overview', 'Strategy Description', 'Performance', 'List of trades'];
+                let foundTabs = [];
+                
+                for (let tab of expectedTabs) {
+                    if (bodyText.includes(tab)) {
+                        foundTabs.push(tab);
+                    }
+                }
+                
+                log('Expected tabs: ' + expectedTabs.join(', '), 'info');
+                log('Found tabs: ' + foundTabs.join(', '), foundTabs.length === expectedTabs.length ? 'success' : 'warning');
+                
+                if (foundTabs.length === 4) {
+                    log('✅ All 4 tabs found successfully!', 'success');
+                } else {
+                    log('⚠️ Missing tabs: ' + expectedTabs.filter(tab => !foundTabs.includes(tab)).join(', '), 'warning');
+                }
+                
+                // Look for tab elements specifically
+                const tabElements = iframeDoc.querySelectorAll('[role="tab"], .tab, button');
+                let tabTexts = [];
+                for (let el of tabElements) {
+                    const text = el.textContent?.trim();
+                    if (text && expectedTabs.some(tab => text.includes(tab))) {
+                        tabTexts.push(text);
+                    }
+                }
+                
+                if (tabTexts.length > 0) {
+                    log('Tab elements found: ' + tabTexts.join(', '), 'success');
+                }
+                
+            } catch (error) {
+                log('❌ Error testing tab structure: ' + error.message, 'error');
+            }
+        }
+
+        async function testStrategyDescriptionTab() {
+            log('📖 Testing Strategy Description tab...', 'info');
+            const iframe = document.getElementById('app-iframe');
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Look for Strategy Description tab and click it
+                const tabElements = iframeDoc.querySelectorAll('button, .tab, [role="tab"]');
+                let strategyDescriptionTab = null;
+                
+                for (let el of tabElements) {
+                    if (el.textContent?.includes('Strategy Description')) {
+                        strategyDescriptionTab = el;
+                        break;
+                    }
+                }
+                
+                if (strategyDescriptionTab) {
+                    log('Found Strategy Description tab, clicking...', 'info');
+                    strategyDescriptionTab.click();
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Check content
+                    const bodyText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                    
+                    const expectedContent = [
+                        'Strategy Overview',
+                        'Entry/Exit Rules', 
+                        'Key Parameters',
+                        'Market Conditions'
+                    ];
+                    
+                    let foundContent = [];
+                    for (let content of expectedContent) {
+                        if (bodyText.includes(content)) {
+                            foundContent.push(content);
+                        }
+                    }
+                    
+                    log('Expected content sections: ' + expectedContent.join(', '), 'info');
+                    log('Found content sections: ' + foundContent.join(', '), foundContent.length > 0 ? 'success' : 'warning');
+                    
+                    if (foundContent.length >= 2) {
+                        log('✅ Strategy Description tab content looks good!', 'success');
+                    } else {
+                        log('⚠️ Limited content found in Strategy Description tab', 'warning');
+                    }
+                    
+                } else {
+                    log('❌ Strategy Description tab not found', 'error');
+                }
+                
+            } catch (error) {
+                log('❌ Error testing Strategy Description tab: ' + error.message, 'error');
+            }
+        }
+
+        async function testStrategySwitch() {
+            log('🔄 Testing strategy switching...', 'info');
+            const iframe = document.getElementById('app-iframe');
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Look for strategy selection dropdown
+                const selects = iframeDoc.querySelectorAll('select');
+                let strategySelect = null;
+                
+                for (let select of selects) {
+                    const options = Array.from(select.options).map(opt => opt.text);
+                    if (options.some(opt => opt.includes('Breakout') || opt.includes('Trend'))) {
+                        strategySelect = select;
+                        break;
+                    }
+                }
+                
+                if (strategySelect) {
+                    log('Found strategy selector', 'info');
+                    const options = Array.from(strategySelect.options);
+                    log('Available strategies: ' + options.map(opt => opt.text).join(', '), 'info');
+                    
+                    // Test switching to different strategies
+                    for (let i = 0; i < Math.min(options.length, 3); i++) {
+                        if (options[i].text.includes('Trend') || options[i].text.includes('Breakout')) {
+                            log('Switching to: ' + options[i].text, 'info');
+                            strategySelect.selectedIndex = i;
+                            strategySelect.dispatchEvent(new Event('change'));
+                            
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            
+                            // Click Strategy Description tab to check content updates
+                            const tabElements = iframeDoc.querySelectorAll('button, .tab, [role="tab"]');
+                            for (let el of tabElements) {
+                                if (el.textContent?.includes('Strategy Description')) {
+                                    el.click();
+                                    break;
+                                }
+                            }
+                            
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                    }
+                    
+                    log('✅ Strategy switching test completed', 'success');
+                } else {
+                    log('❌ Strategy selector not found', 'error');
+                }
+                
+            } catch (error) {
+                log('❌ Error testing strategy switching: ' + error.message, 'error');
+            }
+        }
+
+        async function takeScreenshots() {
+            log('📷 Attempting to capture current state...', 'info');
+            
+            try {
+                // Since we can't actually take screenshots from this context,
+                // let's at least capture the current page state
+                const iframe = document.getElementById('app-iframe');
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Get current tab state
+                const bodyText = iframeDoc.body.textContent || iframeDoc.body.innerText || '';
+                const activeTabRegex = /active.*tab|selected.*tab/i;
+                
+                log('Current page title: ' + (iframeDoc.title || 'Unknown'), 'info');
+                log('Page content length: ' + bodyText.length + ' characters', 'info');
+                
+                // Check which tab appears to be active
+                if (bodyText.includes('Strategy Description')) {
+                    log('📋 Strategy Description tab appears to be visible', 'info');
+                }
+                if (bodyText.includes('Overview')) {
+                    log('📊 Overview tab content detected', 'info');
+                }
+                if (bodyText.includes('Performance')) {
+                    log('📈 Performance tab content detected', 'info');
+                }
+                
+                log('ℹ️ Note: Actual screenshot capture would require additional browser permissions', 'warning');
+                
+            } catch (error) {
+                log('❌ Error capturing state: ' + error.message, 'error');
+            }
+        }
+
+        // Auto-start basic test after page loads
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                log('🚀 Page loaded, ready for testing!', 'success');
+                log('Click the buttons above to run specific tests', 'info');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

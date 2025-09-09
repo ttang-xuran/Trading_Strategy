@@ -903,7 +903,7 @@ function App() {
               comment: `Long Entry (Risk: ${riskPerTrade}%)`
             })
             
-            console.log(`${candle.date}: LONG entry at $${entryPrice.toFixed(2)}, size: ${positionSize.toFixed(8)}`)
+            console.log(`${candle.date}: LONG entry at $${entryPrice.toFixed(2)}, size: ${positionSize.toFixed(8)}`) // Fix deployed
           }
         }
       }

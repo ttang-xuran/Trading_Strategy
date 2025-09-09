@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Strategy Dropdown</title>
+</head>
+<body>
+    <h1>Testing Strategy Selection</h1>
+    
+    <h2>Expected Strategies:</h2>
+    <ul>
+        <li>1. Breakout for long and short (ENABLED)</li>
+        <li>2. Trend Following (ENABLED)</li>
+        <li>3. Trend Following with Risk MGT (DISABLED - Coming Soon)</li>
+        <li>4. Mean Reversion (DISABLED - Coming Soon)</li>
+        <li>5. Momentum (DISABLED - Coming Soon)</li>
+    </ul>
+
+    <h2>Issue Analysis:</h2>
+    <p>The "Trend Following with Risk MGT" strategy is defined in the codebase but is intentionally disabled in the dropdown due to this condition:</p>
+    <pre><code>disabled={strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following'}</code></pre>
+    
+    <p>This means only the first two strategies are selectable, while the others show as "(Coming Soon)".</p>
+
+    <script>
+        // Test fetching the production site
+        fetch('https://trading-strategy-plum.vercel.app/')
+        .then(response => response.text())
+        .then(html => {
+            console.log('Production site accessible');
+            // Check if we can extract strategy info from the page
+            if (html.includes('Trend Following with Risk MGT')) {
+                console.log('✓ "Trend Following with Risk MGT" found in production HTML');
+            } else {
+                console.log('✗ "Trend Following with Risk MGT" NOT found in production HTML');
+            }
+        })
+        .catch(error => {
+            console.error('Error accessing production site:', error);
+        });
+    </script>
+</body>
+</html>

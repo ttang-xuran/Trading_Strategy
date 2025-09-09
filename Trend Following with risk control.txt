@@ -1,0 +1,98 @@
+// @version=5
+strategy("Robust Trend Strategy v3 (Optimized)",
+     overlay=true,
+     initial_capital=10000,
+     commission_type=strategy.commission.percent, commission_value=0.1,
+     slippage=1,
+     default_qty_type=strategy.cash, default_qty_value=10000,
+     pyramiding=0,
+     calc_on_every_tick=false, process_orders_on_close=true)
+
+// ===== Inputs =====
+startDate = input.time(timestamp("2014-01-01T00:00+0000"), "Start")
+endDate   = input.time(timestamp("2025-08-27T00:00+0000"), "End")
+inDate    = time >= startDate and time <= endDate
+
+// -- Core Strategy Parameters --
+smaFastLen = input.int(50, "SMA Fast")
+smaSlowLen = input.int(250, "SMA Slow")
+donLen     = input.int(40, "Donchian Breakout Length")     // OPTIMIZED: Changed from 20 to 40
+atrMult    = input.float(9.0, "ATR Trail Multiplier")      // OPTIMIZED: Changed from 7.0 to 9.0
+atrLen     = input.int(14, "ATR Length")
+
+// -- Filter Parameters --
+adxLen     = input.int(14, "ADX Length")
+adxTh      = input.float(15.0, "ADX Threshold")           // OPTIMIZED: Changed from 20.0 to 15.0
+
+// -- Risk Management Input --
+riskPercent = input.float(5.0, "Risk Per Trade %", minval = 0.1, maxval = 100.0)
+
+// ===== Core MAs =====
+smaFast = ta.sma(close, smaFastLen)
+smaSlow = ta.sma(close, smaSlowLen)
+
+// ===== Wilder DMI/ADX =====
+tr1 = ta.tr
+up = high - high[1]
+dn = low[1] - low
+plus_dm = (up > dn and up > 0) ? up : 0
+minus_dm = (dn > up and dn > 0) ? dn : 0
+pdm = ta.rma(plus_dm, adxLen)
+mdm = ta.rma(minus_dm, adxLen)
+str = ta.rma(tr1, adxLen)
+pdi = pdm / str * 100
+mdi = mdm / str * 100
+dx = math.abs(pdi - mdi) / (pdi + mdi) * 100
+adx = ta.rma(dx, adxLen)
+
+// ===== Donchian breakout on prior bar =====
+donUp = ta.highest(high, donLen)[1]
+
+// ===== Conditions =====
+regimeUp = close > smaSlow and smaFast > smaSlow
+strength = adx > adxTh
+breakout = close > donUp
+
+goLong = inDate and regimeUp and breakout and strength
+
+// ===== Trailing stop & trend exit =====
+var float peakClose = na
+if strategy.position_size > 0
+    peakClose := na(peakClose) ? close : math.max(peakClose, close)
+else
+    peakClose := na
+
+atr = ta.sma(tr1, atrLen)
+trailStop = peakClose - atrMult * atr
+trendExit = close < smaFast
+
+// ===== Risk Management and Entry Order =====
+if (goLong and strategy.position_size == 0)
+    // 1. Define an initial stop loss for position size calculation (e.g., 2 * ATR)
+    float initialStop = close - (2 * atr)
+    // 2. Calculate the total cash amount to risk on this trade
+    float riskAmount = strategy.equity * (riskPercent / 100)
+    // 3. Calculate how much is at risk per unit of the asset (per coin)
+    float positionRisk = close - initialStop
+    // 4. Calculate the final position size (quantity)
+    float qty = 0.0
+    if (positionRisk > 0)
+        qty := riskAmount / positionRisk
+    // 5. Execute the entry order with the calculated quantity
+    strategy.entry("Long", strategy.long, qty=qty)
+
+// ===== Exit Orders =====
+if strategy.position_size > 0
+    // Instead of strategy.exit, we check conditions and close with a market order
+    if (close < trailStop)
+        strategy.close("Long", comment="Exit ATR Trail")
+    if (trendExit)
+        strategy.close("Long", comment="Exit Trend")
+
+// ===== Plots =====
+plot(smaFast, "SMA Fast", color=color.new(color.teal, 0))
+plot(smaSlow, "SMA Slow", color=color.new(color.orange, 0))
+plot(trailStop, "ATR Trail", color=color.new(color.red, 0), style=plot.style_linebr)
+plotchar(goLong, char="▲", title="Entry Signal", location=location.belowbar, color=color.green)
+plot(adx, title="ADX", color=color.new(color.blue, 0))
+hline(adxTh, "ADX Threshold", color=color.gray, linestyle=hline.style_dashed)
