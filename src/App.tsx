@@ -66,7 +66,7 @@ const calculatePerformanceData = (trades: any[], initialCapital: number = 100000
   
   // DEBUG: Log win rate calculation details
   console.log(`🔍 WIN RATE DEBUG: Total trades: ${trades.length}, Closing trades: ${closingTrades.length}, Winners: ${winningTrades}, Losers: ${losingTrades}`)
-  console.log(`🔍 WIN RATE DEBUG: Calculation: (${winningTrades} / ${closingTrades.length}) * 100 = ${closingTrades.length > 0 ? (winningTrades / closingTrades.length) * 100 : 0}%`)
+  console.log(`🔍 WIN RATE DEBUG: Math check: ${winningTrades} ÷ ${closingTrades.length} = ${(winningTrades / closingTrades.length * 100).toFixed(2)}% vs displayed ${closingTrades.length > 0 ? (winningTrades / closingTrades.length) * 100 : 0}%`)
   
   // FIXED: Only count entry trades, not all trades with LONG/SHORT in name
   const longTrades = trades.filter(trade => trade.action === 'ENTRY LONG').length
@@ -1547,7 +1547,7 @@ function App() {
               +{performanceData.win_rate_percent.toFixed(2)}%
             </div>
             <div style={{ fontSize: '0.8rem', color: '#7d8590' }}>
-              {performanceData.winning_trades} / {(performanceData.total_trades / 2)} trade pairs
+              {performanceData.winning_trades} / {performanceData.winning_trades + performanceData.losing_trades} completed trades
             </div>
           </div>
 
