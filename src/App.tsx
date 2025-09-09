@@ -2296,17 +2296,17 @@ function App() {
                               marginBottom: '0.5rem',
                               fontWeight: '500'
                             }}>
-                              Risk Per Trade %: {userParameters.riskPercent}
+                              Risk Per Trade %: {userParameters.riskPerTrade}
                             </label>
                             <input
                               type="range"
                               min="0.5"
                               max="20"
                               step="0.5"
-                              value={userParameters.riskPercent}
+                              value={userParameters.riskPerTrade}
                               onChange={(e) => setUserParameters(prev => ({
                                 ...prev,
-                                riskPercent: parseFloat(e.target.value)
+                                riskPerTrade: parseFloat(e.target.value)
                               }))}
                               style={{
                                 width: '100%',
