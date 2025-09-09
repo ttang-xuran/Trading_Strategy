@@ -2027,7 +2027,7 @@ function App() {
                       <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Entry Rules</h4>
                       <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
                         <li style={{ marginBottom: '0.5rem' }}>
-                          <strong>Trend Filter:</strong> Fast SMA (50) must be above Slow SMA (250) - confirms uptrend regime
+                          <strong>Trend Filter:</strong> Close &gt; Slow SMA (250) AND Fast SMA (50) &gt; Slow SMA (250) - confirms uptrend regime
                         </li>
                         <li style={{ marginBottom: '0.5rem' }}>
                           <strong>Strength Filter:</strong> ADX &gt; threshold (15) indicates trending market
