@@ -64,9 +64,7 @@ const calculatePerformanceData = (trades: any[], initialCapital: number = 100000
   const winningTrades = closingTrades.filter(trade => trade.pnl > 0).length
   const losingTrades = closingTrades.filter(trade => trade.pnl < 0).length
   
-  // DEBUG: Log win rate calculation details
-  console.log(`🔍 WIN RATE DEBUG: Total trades: ${trades.length}, Closing trades: ${closingTrades.length}, Winners: ${winningTrades}, Losers: ${losingTrades}`)
-  console.log(`🔍 WIN RATE DEBUG: Math check: ${winningTrades} ÷ ${closingTrades.length} = ${(winningTrades / closingTrades.length * 100).toFixed(2)}% vs displayed ${closingTrades.length > 0 ? (winningTrades / closingTrades.length) * 100 : 0}%`)
+  // Win rate is calculated as: winning trades ÷ completed round trips
   
   // FIXED: Only count entry trades, not all trades with LONG/SHORT in name
   const longTrades = trades.filter(trade => trade.action === 'ENTRY LONG').length
@@ -900,7 +898,7 @@ function App() {
               action: 'ENTRY LONG',
               price: entryPrice,
               size: positionSize,
-              pnl: 0,
+              pnl: null,
               equity: equity,
               comment: `Long Entry (Risk: ${riskPerTrade}%)`
             })
