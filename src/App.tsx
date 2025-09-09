@@ -802,7 +802,7 @@ function App() {
         equity = positionSize * entryPrice
         
         trades.push({
-          date: candle.date,
+          date: candle.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           action: type === 'LONG' ? 'ENTRY LONG' : 'ENTRY SHORT',
           price: entryPrice,
           size: positionSize,
@@ -825,7 +825,7 @@ function App() {
         equity += pnl
         
         trades.push({
-          date: candle.date,
+          date: candle.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           action: position === 'LONG' ? 'CLOSE LONG' : 'CLOSE SHORT',
           price: exitPrice,
           size: positionSize,
@@ -884,12 +884,22 @@ function App() {
             continue
           }
           
-          const calculatedSize = riskAmount / stopDistance
+          let calculatedSize = riskAmount / stopDistance
           
           // Additional safety check for position size
           if (!isFinite(calculatedSize) || calculatedSize <= 0) {
             console.warn(`Invalid position size: ${calculatedSize}`)
             continue
+          }
+          
+          // Practical fix: Use minimum viable position size to prevent microscopic trades
+          // This ensures trades remain meaningful while still using risk-based sizing
+          const minPositionValue = 1000  // Minimum $1000 position
+          const minPositionSize = minPositionValue / candle.close
+          
+          if (calculatedSize < minPositionSize) {
+            console.log(`Position size too small (${calculatedSize.toFixed(8)}), using minimum viable size (${minPositionSize.toFixed(8)})`)
+            calculatedSize = minPositionSize
           }
           
           // Use next bar open (or current close if last bar)
@@ -913,12 +923,21 @@ function App() {
             continue
           }
           
-          const calculatedSize = riskAmount / stopDistance
+          let calculatedSize = riskAmount / stopDistance
           
           // Additional safety check for position size
           if (!isFinite(calculatedSize) || calculatedSize <= 0) {
             console.warn(`Invalid position size: ${calculatedSize}`)
             continue
+          }
+          
+          // Practical fix: Use minimum viable position size to prevent microscopic trades
+          const minPositionValue = 1000  // Minimum $1000 position
+          const minPositionSize = minPositionValue / candle.close
+          
+          if (calculatedSize < minPositionSize) {
+            console.log(`Position size too small (${calculatedSize.toFixed(8)}), using minimum viable size (${minPositionSize.toFixed(8)})`)
+            calculatedSize = minPositionSize
           }
           
           // Use next bar open (or current close if last bar)
@@ -962,7 +981,7 @@ function App() {
       equity += pnl
       
       trades.push({
-        date: lastCandle.date,
+        date: lastCandle.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         action: position === 'LONG' ? 'CLOSE LONG' : 'CLOSE SHORT',
         price: exitPrice,
         size: positionSize,
