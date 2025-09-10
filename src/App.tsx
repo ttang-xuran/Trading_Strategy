@@ -1684,17 +1684,6 @@ function App() {
                   const parsedDate = new Date(trade.date);
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
                   
-                  // Debug logging for TREND EXIT signals
-                  if (trade.action.includes('TREND EXIT') || trade.action.includes('ATR TRAIL STOP')) {
-                    console.log('Chart Signal Debug:', {
-                      originalDate: trade.date,
-                      parsedDate: parsedDate,
-                      isoDate: isoDate,
-                      action: trade.action,
-                      price: trade.price
-                    });
-                  }
-                  
                   // Determine signal type based on trade action
                   const signalType = (() => {
                     if (trade.action.includes('ENTRY LONG')) return 'BUY';

@@ -558,18 +558,6 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         })
       }
       
-      // Debug logging for CLOSE signals
-      if (signal.type === 'CLOSE') {
-        console.log('Chart Debug - CLOSE signal:', {
-          signalDate: signal.date,
-          signalType: signal.type,
-          signalIndex: signalIndex,
-          firstVisibleDate: visibleData[0]?.date,
-          lastVisibleDate: visibleData[visibleData.length - 1]?.date,
-          visibleDataLength: visibleData.length
-        });
-      }
-      
       if (signalIndex === -1) return
 
       const x = padding + (chartWidth / (visibleData.length - 1)) * signalIndex
