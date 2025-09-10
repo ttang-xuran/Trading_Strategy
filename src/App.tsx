@@ -1671,7 +1671,12 @@ function App() {
               onTimeframeChange={setSelectedTimeframe}
               onDateRangeChange={setChartDateRange}
               tradeSignals={(() => {
-                const filteredTrades = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('CLOSE'));
+                const filteredTrades = allTrades.filter(trade => 
+                  trade.action.includes('ENTRY') || 
+                  trade.action.includes('CLOSE') || 
+                  trade.action.includes('TREND EXIT') || 
+                  trade.action.includes('ATR TRAIL STOP')
+                );
                 
                 // Map trades to signals
                 const allSignals = filteredTrades.map(trade => {
@@ -1685,6 +1690,8 @@ function App() {
                     if (trade.action.includes('ENTRY SHORT')) return 'SELL';
                     if (trade.action.includes('CLOSE LONG')) return 'CLOSE';
                     if (trade.action.includes('CLOSE SHORT')) return 'SELL';
+                    if (trade.action.includes('TREND EXIT')) return 'CLOSE';
+                    if (trade.action.includes('ATR TRAIL STOP')) return 'CLOSE';
                     // Fallback for other patterns
                     return trade.action.includes('ENTRY') ? 
                       (trade.action.includes('LONG') ? 'BUY' : 'SELL') : 'CLOSE';
