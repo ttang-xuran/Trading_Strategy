@@ -1687,6 +1687,11 @@ function App() {
                   const parsedDate = new Date(trade.date);
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
                   
+                  // Debug date conversion for Aug 15
+                  if (trade.date.includes('Aug 15')) {
+                    console.log(`🗓️ DATE CONVERSION AUG 15: input="${trade.date}" → parsedDate=${parsedDate} → isoDate="${isoDate}"`);
+                  }
+                  
                   // Determine signal type with detailed debugging
                   let signalType;
                   if (trade.action.includes('ENTRY LONG')) {
