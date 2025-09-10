@@ -1686,17 +1686,31 @@ function App() {
                   // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
                   const parsedDate = new Date(trade.date);
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
+                  
+                  // Determine signal type with detailed debugging
+                  let signalType;
+                  if (trade.action.includes('ENTRY LONG')) {
+                    signalType = 'BUY';
+                  } else if (trade.action.includes('ENTRY SHORT')) {
+                    signalType = 'SELL';
+                  } else if (trade.action.includes('CLOSE LONG')) {
+                    signalType = 'CLOSE';
+                  } else if (trade.action.includes('CLOSE SHORT')) {
+                    signalType = 'SELL';
+                  } else {
+                    // Fallback for other patterns
+                    signalType = trade.action.includes('ENTRY') ? 
+                      (trade.action.includes('LONG') ? 'BUY' : 'SELL') : 'CLOSE';
+                  }
+                  
+                  // Debug specific Aug 15 trade
+                  if (trade.date.includes('Aug 15')) {
+                    console.log(`🔍 AUG 15 SIGNAL MAPPING: action="${trade.action}" → type="${signalType}"`);
+                  }
+                  
                   return {
                     date: isoDate,
-                    type: (() => {
-                      if (trade.action.includes('ENTRY LONG')) return 'BUY';
-                      if (trade.action.includes('ENTRY SHORT')) return 'SELL';
-                      if (trade.action.includes('CLOSE LONG')) return 'CLOSE';
-                      if (trade.action.includes('CLOSE SHORT')) return 'SELL';
-                      // Fallback for other patterns
-                      return trade.action.includes('ENTRY') ? 
-                        (trade.action.includes('LONG') ? 'BUY' : 'SELL') : 'CLOSE';
-                    })(),
+                    type: signalType,
                     price: trade.price,
                     reason: trade.comment || 'Strategy Signal'
                   };
