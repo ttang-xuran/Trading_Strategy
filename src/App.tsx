@@ -1708,21 +1708,23 @@ function App() {
                   };
                 });
                 
-                // Deduplicate signals by date, prioritizing ENTRY signals over CLOSE signals
-                const signalsByDate = new Map();
+                // Only deduplicate signals when they occur on the SAME date AND same price
+                // This fixes the Aug 15 breakout issue without affecting other strategies
+                const signalsByDatePrice = new Map();
                 allSignals.forEach(signal => {
-                  const existingSignal = signalsByDate.get(signal.date);
+                  const key = `${signal.date}-${signal.price}`;
+                  const existingSignal = signalsByDatePrice.get(key);
                   if (!existingSignal) {
-                    signalsByDate.set(signal.date, signal);
+                    signalsByDatePrice.set(key, signal);
                   } else if (signal.isEntry && !existingSignal.isEntry) {
-                    // Replace CLOSE signal with ENTRY signal for same date
-                    signalsByDate.set(signal.date, signal);
+                    // Only replace CLOSE signal with ENTRY signal for same date AND price
+                    signalsByDatePrice.set(key, signal);
                   }
                   // If existing signal is ENTRY and new signal is CLOSE, keep the ENTRY signal
                 });
                 
                 // Convert back to array and remove the isEntry flag
-                const signals = Array.from(signalsByDate.values()).map(signal => ({
+                const signals = Array.from(signalsByDatePrice.values()).map(signal => ({
                   date: signal.date,
                   type: signal.type,
                   price: signal.price,
