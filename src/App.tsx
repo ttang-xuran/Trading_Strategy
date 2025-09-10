@@ -1671,16 +1671,7 @@ function App() {
               onTimeframeChange={setSelectedTimeframe}
               onDateRangeChange={setChartDateRange}
               tradeSignals={(() => {
-                console.log(`🎯 ALL TRADES DEBUG: ${allTrades.length} total trades:`);
-                allTrades.slice(0, 4).forEach((trade, i) => {
-                  console.log(`🎯   Trade ${i+1}: action="${trade.action}", date="${trade.date}", price=${trade.price}`);
-                });
-                
                 const filteredTrades = allTrades.filter(trade => trade.action.includes('ENTRY') || trade.action.includes('CLOSE'));
-                console.log(`🎯 FILTERED TRADES: ${filteredTrades.length} trades after filter`);
-                filteredTrades.slice(0, 4).forEach((trade, i) => {
-                  console.log(`🎯   Filtered ${i+1}: action="${trade.action}"`);
-                });
                 
                 // Map trades to signals
                 const allSignals = filteredTrades.map(trade => {
@@ -1730,8 +1721,6 @@ function App() {
                   price: signal.price,
                   reason: signal.reason
                 }));
-                console.log(`🎯 TRADE SIGNALS DEBUG: Generated ${signals.length} signals from ${allTrades.length} trades`);
-                console.log('🎯 Sample signals:', signals.slice(0, 3));
                 return signals;
               })()} 
             />
