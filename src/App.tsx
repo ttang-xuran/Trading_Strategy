@@ -1687,31 +1687,16 @@ function App() {
                   const parsedDate = new Date(trade.date);
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
                   
-                  // Debug date conversion for Aug 15
-                  if (trade.date.includes('Aug 15')) {
-                    console.log(`🗓️ DATE CONVERSION AUG 15: input="${trade.date}" → parsedDate=${parsedDate} → isoDate="${isoDate}"`);
-                  }
-                  
-                  // Determine signal type with detailed debugging
-                  let signalType;
-                  if (trade.action.includes('ENTRY LONG')) {
-                    signalType = 'BUY';
-                  } else if (trade.action.includes('ENTRY SHORT')) {
-                    signalType = 'SELL';
-                  } else if (trade.action.includes('CLOSE LONG')) {
-                    signalType = 'CLOSE';
-                  } else if (trade.action.includes('CLOSE SHORT')) {
-                    signalType = 'SELL';
-                  } else {
+                  // Determine signal type based on trade action
+                  const signalType = (() => {
+                    if (trade.action.includes('ENTRY LONG')) return 'BUY';
+                    if (trade.action.includes('ENTRY SHORT')) return 'SELL';
+                    if (trade.action.includes('CLOSE LONG')) return 'CLOSE';
+                    if (trade.action.includes('CLOSE SHORT')) return 'SELL';
                     // Fallback for other patterns
-                    signalType = trade.action.includes('ENTRY') ? 
+                    return trade.action.includes('ENTRY') ? 
                       (trade.action.includes('LONG') ? 'BUY' : 'SELL') : 'CLOSE';
-                  }
-                  
-                  // Debug specific Aug 15 trade
-                  if (trade.date.includes('Aug 15')) {
-                    console.log(`🔍 AUG 15 SIGNAL MAPPING: action="${trade.action}" → type="${signalType}"`);
-                  }
+                  })();
                   
                   return {
                     date: isoDate,
