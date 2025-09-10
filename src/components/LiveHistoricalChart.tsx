@@ -547,8 +547,19 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
 
     // Draw trade signals (only visible ones)
     tradeSignals.forEach(signal => {
+      // Debug Aug 15 signals specifically
+      if (signal.date.includes('2025-08-15') || signal.date.includes('Aug 15')) {
+        console.log(`🎨 CHART RENDERING AUG 15: date="${signal.date}" type="${signal.type}" price=${signal.price}`);
+      }
+      
       const signalIndex = visibleData.findIndex(c => c.date === signal.date)
-      if (signalIndex === -1) return
+      if (signalIndex === -1) {
+        if (signal.date.includes('2025-08-15') || signal.date.includes('Aug 15')) {
+          console.log(`❌ CHART: Aug 15 signal not found in visible data. Signal date: "${signal.date}"`);
+          console.log(`🔍 CHART: Sample visible dates:`, visibleData.slice(0, 5).map(d => d.date));
+        }
+        return
+      }
 
       const x = padding + (chartWidth / (visibleData.length - 1)) * signalIndex
       const y = padding + chartHeight - ((signal.price - minPrice) / priceRange) * chartHeight
@@ -571,6 +582,12 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       ctx.fillStyle = '#f0f6fc'
       ctx.font = 'bold 8px Segoe UI'
       ctx.textAlign = 'center'
+      
+      // Debug label rendering for Aug 15
+      if (signal.date.includes('2025-08-15') || signal.date.includes('Aug 15')) {
+        console.log(`🎨 CHART LABEL AUG 15: Rendering label "${signal.type}" at position (${x}, ${signal.type === 'BUY' ? y + 35 : y - 30})`);
+      }
+      
       ctx.fillText(
         signal.type,
         x,
