@@ -545,7 +545,18 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
 
     // Draw trade signals (only visible ones)
     tradeSignals.forEach(signal => {
-      const signalIndex = visibleData.findIndex(c => c.date === signal.date)
+      // Improved date matching - try exact match first, then fuzzy match
+      let signalIndex = visibleData.findIndex(c => c.date === signal.date)
+      
+      // If exact match fails, try to match by converting both dates to comparable format
+      if (signalIndex === -1) {
+        const signalDateObj = new Date(signal.date)
+        signalIndex = visibleData.findIndex(c => {
+          const candleDateObj = new Date(c.date)
+          // Match if dates are the same day (ignore time)
+          return candleDateObj.toDateString() === signalDateObj.toDateString()
+        })
+      }
       
       // Debug logging for CLOSE signals
       if (signal.type === 'CLOSE') {
