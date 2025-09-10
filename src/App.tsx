@@ -1682,7 +1682,8 @@ function App() {
                   console.log(`🎯   Filtered ${i+1}: action="${trade.action}"`);
                 });
                 
-                const signals = filteredTrades.map(trade => {
+                // Map trades to signals
+                const allSignals = filteredTrades.map(trade => {
                   // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
                   const parsedDate = new Date(trade.date);
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
@@ -1702,9 +1703,31 @@ function App() {
                     date: isoDate,
                     type: signalType,
                     price: trade.price,
-                    reason: trade.comment || 'Strategy Signal'
+                    reason: trade.comment || 'Strategy Signal',
+                    isEntry: trade.action.includes('ENTRY')
                   };
                 });
+                
+                // Deduplicate signals by date, prioritizing ENTRY signals over CLOSE signals
+                const signalsByDate = new Map();
+                allSignals.forEach(signal => {
+                  const existingSignal = signalsByDate.get(signal.date);
+                  if (!existingSignal) {
+                    signalsByDate.set(signal.date, signal);
+                  } else if (signal.isEntry && !existingSignal.isEntry) {
+                    // Replace CLOSE signal with ENTRY signal for same date
+                    signalsByDate.set(signal.date, signal);
+                  }
+                  // If existing signal is ENTRY and new signal is CLOSE, keep the ENTRY signal
+                });
+                
+                // Convert back to array and remove the isEntry flag
+                const signals = Array.from(signalsByDate.values()).map(signal => ({
+                  date: signal.date,
+                  type: signal.type,
+                  price: signal.price,
+                  reason: signal.reason
+                }));
                 console.log(`🎯 TRADE SIGNALS DEBUG: Generated ${signals.length} signals from ${allTrades.length} trades`);
                 console.log('🎯 Sample signals:', signals.slice(0, 3));
                 return signals;
