@@ -335,7 +335,6 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
         startIndex = Math.max(0, Math.min(candleData.length - visibleCandles, Math.floor(panOffset)))
         endIndex = Math.min(candleData.length, startIndex + visibleCandles)
       }
-      console.log(`${selectedTimeRange} timeframe: showing ${endIndex - startIndex} candles from ${candleData[startIndex]?.date || 'N/A'} to ${candleData[endIndex - 1]?.date || 'N/A'} (Total dataset: ${candleData.length} candles)`)
     } else {
       // For other timeframes, show most recent data first
       startIndex = Math.max(0, Math.min(
@@ -413,7 +412,6 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       candleWidth = Math.max(4, Math.min(12, candleSpacing * 0.7))
     }
     
-    console.log(`Chart debug: visibleData.length=${visibleData.length}, chartWidth=${chartWidth}, candleSpacing=${candleSpacing}, candleWidth=${candleWidth}`)
     
     visibleData.forEach((candle, index) => {
       const x = padding + candleSpacing * index + candleSpacing / 2
