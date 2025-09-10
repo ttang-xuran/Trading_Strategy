@@ -1688,9 +1688,15 @@ function App() {
                   const isoDate = isNaN(parsedDate.getTime()) ? trade.date : parsedDate.toISOString().split('T')[0];
                   return {
                     date: isoDate,
-                    type: trade.action.includes('ENTRY') ? 
-                      (trade.action.includes('LONG') ? 'BUY' : 'SELL') :
-                      'CLOSE',
+                    type: (() => {
+                      if (trade.action.includes('ENTRY LONG')) return 'BUY';
+                      if (trade.action.includes('ENTRY SHORT')) return 'SELL';
+                      if (trade.action.includes('CLOSE LONG')) return 'CLOSE';
+                      if (trade.action.includes('CLOSE SHORT')) return 'SELL';
+                      // Fallback for other patterns
+                      return trade.action.includes('ENTRY') ? 
+                        (trade.action.includes('LONG') ? 'BUY' : 'SELL') : 'CLOSE';
+                    })(),
                     price: trade.price,
                     reason: trade.comment || 'Strategy Signal'
                   };
