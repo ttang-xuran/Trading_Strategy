@@ -1720,11 +1720,17 @@ function App() {
                   const existingSignal = signalsByDatePrice.get(key);
                   if (!existingSignal) {
                     signalsByDatePrice.set(key, signal);
-                  } else if (signal.isEntry && !existingSignal.isEntry) {
-                    // Only replace CLOSE signal with ENTRY signal for same date AND price
-                    signalsByDatePrice.set(key, signal);
+                  } else {
+                    // For Trend Following strategy, preserve both ENTRY and CLOSE signals by using unique keys
+                    // This prevents CLOSE signals from being removed by deduplication
+                    const uniqueKey = `${signal.date}-${signal.price}-${signal.type}`;
+                    if (!signalsByDatePrice.has(uniqueKey)) {
+                      signalsByDatePrice.set(uniqueKey, signal);
+                    } else if (signal.isEntry && !existingSignal.isEntry) {
+                      // Only replace CLOSE signal with ENTRY signal for breakout strategy
+                      signalsByDatePrice.set(key, signal);
+                    }
                   }
-                  // If existing signal is ENTRY and new signal is CLOSE, keep the ENTRY signal
                 });
                 
                 // Convert back to array and remove the isEntry flag
