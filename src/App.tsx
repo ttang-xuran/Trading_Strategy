@@ -1678,6 +1678,9 @@ function App() {
                   trade.action.includes('ATR TRAIL STOP')
                 );
                 
+                // Debug: Log filtered trades for debugging
+                console.log('FILTERED TRADES DEBUG:', filteredTrades.length, filteredTrades.map(t => ({ action: t.action, date: t.date })));
+                
                 // Map trades to signals
                 const allSignals = filteredTrades.map(trade => {
                   // Parse formatted date string like "Aug 15, 2025" back to YYYY-MM-DD format
@@ -1706,6 +1709,9 @@ function App() {
                   };
                 });
                 
+                // Debug: Log all mapped signals
+                console.log('ALL SIGNALS DEBUG:', allSignals.length, allSignals.filter(s => s.type === 'CLOSE'));
+                
                 // Only deduplicate signals when they occur on the SAME date AND same price
                 // This fixes the Aug 15 breakout issue without affecting other strategies
                 const signalsByDatePrice = new Map();
@@ -1728,6 +1734,10 @@ function App() {
                   price: signal.price,
                   reason: signal.reason
                 }));
+                
+                // Debug: Log final signals being sent to chart
+                console.log('FINAL SIGNALS DEBUG:', signals.length, signals.filter(s => s.type === 'CLOSE'));
+                
                 return signals;
               })()} 
             />
