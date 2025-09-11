@@ -1712,29 +1712,17 @@ function App() {
                 // Debug: Log all mapped signals
                 console.log('ALL SIGNALS DEBUG:', allSignals.length, allSignals.filter(s => s.type === 'CLOSE'));
                 
-                // Only deduplicate signals when they occur on the SAME date AND same price
-                // This fixes the Aug 15 breakout issue without affecting other strategies
-                const signalsByDatePrice = new Map();
-                allSignals.forEach(signal => {
-                  const key = `${signal.date}-${signal.price}`;
-                  const existingSignal = signalsByDatePrice.get(key);
-                  if (!existingSignal) {
-                    signalsByDatePrice.set(key, signal);
-                  } else {
-                    // For Trend Following strategy, preserve both ENTRY and CLOSE signals by using unique keys
-                    // This prevents CLOSE signals from being removed by deduplication
-                    const uniqueKey = `${signal.date}-${signal.price}-${signal.type}`;
-                    if (!signalsByDatePrice.has(uniqueKey)) {
-                      signalsByDatePrice.set(uniqueKey, signal);
-                    } else if (signal.isEntry && !existingSignal.isEntry) {
-                      // Only replace CLOSE signal with ENTRY signal for breakout strategy
-                      signalsByDatePrice.set(key, signal);
-                    }
-                  }
+                // Use unique keys that include signal type to prevent CLOSE signals from being removed
+                // This ensures all ENTRY and CLOSE signals are preserved for chart display
+                const signalsByUniqueKey = new Map();
+                allSignals.forEach((signal, index) => {
+                  // Create a unique key that includes type and index to prevent any deduplication of CLOSE signals
+                  const uniqueKey = `${signal.date}-${signal.price}-${signal.type}-${index}`;
+                  signalsByUniqueKey.set(uniqueKey, signal);
                 });
                 
                 // Convert back to array and remove the isEntry flag
-                const signals = Array.from(signalsByDatePrice.values()).map(signal => ({
+                const signals = Array.from(signalsByUniqueKey.values()).map(signal => ({
                   date: signal.date,
                   type: signal.type,
                   price: signal.price,
