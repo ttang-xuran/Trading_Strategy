@@ -543,6 +543,9 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
       ctx.setLineDash([])
     }
 
+    // Debug: Log signals received by chart
+    console.log('CHART SIGNALS DEBUG:', tradeSignals.length, tradeSignals.filter(s => s.type === 'CLOSE').length);
+    
     // Draw trade signals (only visible ones)
     tradeSignals.forEach(signal => {
       // Improved date matching - try exact match first, then fuzzy match
@@ -556,6 +559,18 @@ export default function LiveHistoricalChart({ height = 400, tradeSignals = [], s
           // Match if dates are the same day (ignore time)
           return candleDateObj.toDateString() === signalDateObj.toDateString()
         })
+      }
+      
+      // Debug specific CLOSE signals
+      if (signal.type === 'CLOSE') {
+        console.log('CHART CLOSE DEBUG:', {
+          signalDate: signal.date,
+          signalPrice: signal.price,
+          signalIndex: signalIndex,
+          firstVisible: visibleData[0]?.date,
+          lastVisible: visibleData[visibleData.length - 1]?.date,
+          visibleCount: visibleData.length
+        });
       }
       
       if (signalIndex === -1) return
