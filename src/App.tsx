@@ -105,7 +105,7 @@ const initialPrice = {
 }
 
 // Trading strategy definitions
-type StrategyType = 'breakout-long-short' | 'trend-following' | 'trend-following-risk-mgt' | 'mean-reversion' | 'momentum'
+type StrategyType = 'breakout-long-short' | 'trend-following' | 'trend-following-risk-mgt' | 'best-trend-following' | 'mean-reversion' | 'momentum'
 
 interface TradingStrategy {
   id: StrategyType
@@ -155,6 +155,20 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
       adxTh: 15.0,
       atrLen: 14,
       riskPerTrade: 5.0
+    }
+  },
+  'best-trend-following': {
+    id: 'best-trend-following',
+    name: 'Best Trend Following Strategy',
+    description: 'High-return multi-entry trend following with aggressive compounding position sizing (15% risk per trade). Features MA crossover, breakout, and pullback entries with dynamic trailing stops.',
+    parameters: {
+      fastLen: 8,
+      slowLen: 30,
+      atrLen: 14,
+      atrMult: 2.0,
+      riskPercent: 15.0,
+      useCompounding: true,
+      maxEquityUsage: 0.95
     }
   },
   'mean-reversion': {
@@ -935,6 +949,184 @@ function App() {
     }
   }
 
+  const generateBestTrendFollowingTrades = async (ohlcData: any[], parameters: any, equity: number, capital: number) => {
+    const { fastLen, slowLen, atrLen, atrMult, riskPercent, useCompounding, maxEquityUsage } = parameters
+    console.log(`Using Best Trend Following parameters: fastEMA=${fastLen}, slowEMA=${slowLen}, atr=${atrLen}, atrMult=${atrMult}, risk=${riskPercent}%`)
+
+    let position = null  // null or 'LONG'
+    let entryPrice = 0
+    let positionSize = 0
+    let trailStop = null
+    const trades = []
+
+    // Technical indicator calculation helpers
+    const calculateEMA = (data: any[], period: number, index: number) => {
+      if (index < period - 1) return null
+
+      // Calculate initial SMA for first EMA value
+      if (index === period - 1) {
+        let sum = 0
+        for (let i = index - period + 1; i <= index; i++) {
+          sum += data[i].close
+        }
+        return sum / period
+      }
+
+      // EMA formula: EMA = (Close * 2/(period+1)) + (Previous EMA * (1 - 2/(period+1)))
+      const multiplier = 2 / (period + 1)
+      const previousEMA = calculateEMA(data, period, index - 1)
+      return (data[index].close * multiplier) + (previousEMA * (1 - multiplier))
+    }
+
+    const calculateATR = (data: any[], period: number, index: number) => {
+      if (index < 1) return null
+      if (index < period) {
+        const startIndex = Math.max(1, index - period + 1)
+        let sum = 0
+        let count = 0
+        for (let i = startIndex; i <= index; i++) {
+          const current = data[i]
+          const previous = data[i - 1]
+          const tr = Math.max(
+            current.high - current.low,
+            Math.abs(current.high - previous.close),
+            Math.abs(current.low - previous.close)
+          )
+          sum += tr
+          count++
+        }
+        return sum / count
+      }
+
+      const current = data[index]
+      const previous = data[index - 1]
+      const currentTR = Math.max(
+        current.high - current.low,
+        Math.abs(current.high - previous.close),
+        Math.abs(current.low - previous.close)
+      )
+
+      const previousATR = calculateATR(data, period, index - 1)
+      return (previousATR * (period - 1) + currentTR) / period
+    }
+
+    // Process each candle
+    for (let i = Math.max(slowLen, atrLen, 10); i < ohlcData.length; i++) {
+      const candle = ohlcData[i]
+      const prevCandle = ohlcData[i - 1]
+
+      // Calculate indicators
+      const fastEMA = calculateEMA(ohlcData, fastLen, i)
+      const slowEMA = calculateEMA(ohlcData, slowLen, i)
+      const fastEMAPrev = calculateEMA(ohlcData, fastLen, i - 1)
+      const slowEMAPrev = calculateEMA(ohlcData, slowLen, i - 1)
+      const atr = calculateATR(ohlcData, atrLen, i)
+
+      if (!fastEMA || !slowEMA || !fastEMAPrev || !slowEMAPrev || !atr) continue
+
+      // Trend and momentum conditions
+      const uptrend = fastEMA > slowEMA && candle.close > fastEMA
+      const momentum = candle.close > ohlcData[i - 5]?.close
+
+      // Entry conditions
+      const entry1 = fastEMAPrev <= slowEMAPrev && fastEMA > slowEMA && uptrend  // MA crossover
+      const entry2 = candle.close > Math.max(...ohlcData.slice(Math.max(0, i - 9), i).map(c => c.high)) && uptrend  // Breakout
+      const entry3 = candle.close > fastEMA && prevCandle.close <= fastEMAPrev && uptrend  // MA reclaim
+
+      const entrySignal = (entry1 || entry2 || entry3) && momentum
+
+      // Exit conditions
+      if (position === 'LONG') {
+        // Update trailing stop
+        const currentStop = candle.close - (atr * atrMult)
+        trailStop = trailStop ? Math.max(trailStop, currentStop) : currentStop
+
+        const trendExit = candle.close < fastEMA
+        const stopExit = candle.close <= trailStop
+
+        if (stopExit || trendExit) {
+          const exitPrice = candle.close
+          const pnl = (exitPrice - entryPrice) * positionSize
+          equity += pnl
+
+          trades.push({
+            date: candle.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: stopExit ? 'STOP LOSS' : 'TREND EXIT',
+            price: exitPrice,
+            size: positionSize,
+            pnl: pnl,
+            equity: equity,
+            comment: stopExit ? `ATR Stop Loss (${atrMult}x ATR)` : 'Close < Fast EMA'
+          })
+
+          position = null
+          positionSize = 0
+          trailStop = null
+
+          console.log(`Exit signal generated on ${candle.date.toLocaleDateString()}: ${stopExit ? 'stop loss' : 'trend exit'}`)
+        }
+      }
+
+      // Entry logic
+      if (!position && entrySignal) {
+        entryPrice = candle.close
+        const stopLoss = entryPrice - (atr * atrMult)
+
+        // Position sizing with compounding
+        const baseEquity = useCompounding ? equity : capital
+        const riskAmount = baseEquity * (riskPercent / 100)
+        const riskPerShare = entryPrice - stopLoss
+
+        if (riskPerShare > 0) {
+          const qty = riskAmount / riskPerShare
+          const maxShares = baseEquity * maxEquityUsage / entryPrice
+          positionSize = Math.min(qty, maxShares)
+
+          position = 'LONG'
+          trailStop = stopLoss
+
+          const entryType = entry1 ? 'MA Cross' : entry2 ? 'Breakout' : 'MA Reclaim'
+
+          trades.push({
+            date: candle.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            action: `ENTRY LONG (${entryType})`,
+            price: entryPrice,
+            size: positionSize,
+            pnl: 0,
+            equity: equity,
+            comment: `${entryType} Entry, Stop: $${stopLoss.toFixed(2)}`
+          })
+
+          console.log(`Entry signal generated on ${candle.date.toLocaleDateString()}: ${entryType} at $${entryPrice}`)
+        }
+      }
+    }
+
+    // Handle any remaining open position
+    if (position === 'LONG' && ohlcData.length > 0) {
+      const lastCandle = ohlcData[ohlcData.length - 1]
+      const exitPrice = lastCandle.close
+      const pnl = (exitPrice - entryPrice) * positionSize
+      equity += pnl
+
+      trades.push({
+        date: lastCandle.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        action: 'CLOSE LONG',
+        price: exitPrice,
+        size: positionSize,
+        pnl: pnl,
+        equity: equity,
+        comment: 'End of Data'
+      })
+    }
+
+    console.log(`Generated ${trades.length} Best Trend Following trades from ${ohlcData.length} bars`)
+    return {
+      trades: trades.reverse(),
+      historicalDataCount: ohlcData.length
+    }
+  }
+
   const generateAllTrades = async (source: string = 'coinbase', timeframe: string = '5Y', capital: number = 100000, strategyType: StrategyType = 'breakout-long-short', instrument: string = 'BTC/USD', customParameters?: any) => {
     console.log(`Generating strategy trades for source: ${source}, timeframe: ${timeframe}, strategy: ${strategyType}`)
     
@@ -946,8 +1138,8 @@ function App() {
       }
       
       // Only allow implemented strategies
-      if (strategyType !== 'breakout-long-short' && strategyType !== 'trend-following' && strategyType !== 'trend-following-risk-mgt') {
-        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently available: "Breakout for long and short", "Trend Following", and "Trend Following with Risk MGT".`)
+      if (strategyType !== 'breakout-long-short' && strategyType !== 'trend-following' && strategyType !== 'trend-following-risk-mgt' && strategyType !== 'best-trend-following') {
+        throw new Error(`Strategy "${currentStrategy.name}" is not yet implemented. Currently available: "Breakout for long and short", "Trend Following", "Trend Following with Risk MGT", and "Best Trend Following Strategy".`)
       }
       
       // Get REAL historical OHLC data from the selected exchange for the selected timeframe
@@ -977,6 +1169,8 @@ function App() {
         return await generateTrendFollowingTrades(ohlcData, parameters, equity, capital)
       } else if (strategyType === 'trend-following-risk-mgt') {
         return await generateTrendFollowingRiskMgtTrades(ohlcData, parameters, equity, capital)
+      } else if (strategyType === 'best-trend-following') {
+        return await generateBestTrendFollowingTrades(ohlcData, parameters, equity, capital)
       }
       
     } catch (error) {
@@ -1409,12 +1603,12 @@ function App() {
                 <option 
                   key={strategy.id} 
                   value={strategy.id}
-                  disabled={strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt'}
+                  disabled={strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt' && strategy.id !== 'best-trend-following'}
                   style={{
-                    color: (strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt') ? '#999' : 'black'
+                    color: (strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt' && strategy.id !== 'best-trend-following') ? '#999' : 'black'
                   }}
                 >
-                  {strategy.name} {(strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt') ? '(Coming Soon)' : ''}
+                  {strategy.name} {(strategy.id !== 'breakout-long-short' && strategy.id !== 'trend-following' && strategy.id !== 'trend-following-risk-mgt' && strategy.id !== 'best-trend-following') ? '(Coming Soon)' : ''}
                 </option>
               ))}
             </select>
@@ -1671,11 +1865,12 @@ function App() {
               onTimeframeChange={setSelectedTimeframe}
               onDateRangeChange={setChartDateRange}
               tradeSignals={(() => {
-                const filteredTrades = allTrades.filter(trade => 
-                  trade.action.includes('ENTRY') || 
-                  trade.action.includes('CLOSE') || 
-                  trade.action.includes('TREND EXIT') || 
-                  trade.action.includes('ATR TRAIL STOP')
+                const filteredTrades = allTrades.filter(trade =>
+                  trade.action.includes('ENTRY') ||
+                  trade.action.includes('CLOSE') ||
+                  trade.action.includes('TREND EXIT') ||
+                  trade.action.includes('ATR TRAIL STOP') ||
+                  trade.action.includes('STOP LOSS')
                 );
                 
                 // Debug: Log filtered trades for debugging

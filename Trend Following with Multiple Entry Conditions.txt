@@ -1,0 +1,134 @@
+// @version=5
+strategy("High-Return Trend Strategy v7",
+     overlay=true,
+     initial_capital=100,
+     commission_type=strategy.commission.percent, commission_value=0.1,
+     slippage=1,
+     default_qty_type=strategy.cash, default_qty_value=10000,
+     pyramiding=0,
+     calc_on_every_tick=false, process_orders_on_close=true)
+
+// ===== Inputs =====
+startDate = input.time(timestamp("2014-01-19T00:00+0000"), "Start")
+endDate   = input.time(timestamp("2025-12-27T00:00+0000"), "End")
+inDate    = time >= startDate and time <= endDate
+
+// -- Simple but Effective Parameters --
+fastLen = input.int(8, "Fast MA")
+slowLen = input.int(30, "Slow MA") 
+atrLen = input.int(14, "ATR Length")
+atrMult = input.float(2, "ATR Multiplier")
+
+// -- Risk Management --
+riskPercent = input.float(15.0, "Risk Per Trade %", minval=5.0, maxval=30.0)
+useCompounding = input.bool(true, "Use Compounding")
+
+// ===== Technical Indicators =====
+fastMA = ta.ema(close, fastLen)
+slowMA = ta.ema(close, slowLen)
+atr = ta.atr(atrLen)
+
+// Simple trend detection
+uptrend = fastMA > slowMA and close > fastMA
+momentum = close > close[5]  // Simple momentum filter
+
+// ===== Entry Conditions =====
+// Multiple simple entry triggers
+entry1 = ta.crossover(fastMA, slowMA) and uptrend  // MA crossover
+entry2 = close > ta.highest(high, 10)[1] and uptrend  // Simple breakout
+entry3 = close > fastMA and close[1] <= fastMA[1] and uptrend  // Price back above MA
+
+entrySignal = inDate and (entry1 or entry2 or entry3) and momentum
+
+// ===== Position Sizing =====
+// Aggressive compounding position sizing
+baseEquity = useCompounding ? strategy.equity : strategy.initial_capital
+riskAmount = baseEquity * (riskPercent / 100)
+
+// ===== Entry Logic =====
+var float entryPrice = na
+var float stopLoss = na
+
+if entrySignal and strategy.position_size == 0
+    entryPrice := close
+    stopLoss := close - (atr * atrMult)
+    
+    // Calculate position size
+    riskPerShare = close - stopLoss
+    qty = riskPerShare > 0 ? riskAmount / riskPerShare : 0
+    
+    // Cap position size to prevent excessive leverage
+    maxShares = baseEquity * 0.95 / close  // Max 95% of equity
+    finalQty = math.min(qty, maxShares)
+    
+    strategy.entry("Long", strategy.long, qty=finalQty)
+
+// ===== Exit Logic =====
+var float trailStop = na
+
+if strategy.position_size > 0
+    // Simple trailing stop that moves up with price
+    currentStop = close - (atr * atrMult)
+    trailStop := na(trailStop) ? currentStop : math.max(trailStop, currentStop)
+    
+    // Exit conditions
+    trendExit = close < fastMA  // Exit when price breaks fast MA
+    stopExit = close <= trailStop  // Trailing stop exit
+    
+    if stopExit
+        strategy.close("Long", comment="Stop Loss")
+    else if trendExit
+        strategy.close("Long", comment="Trend Exit")
+else
+    trailStop := na
+
+// ===== Plots =====
+plot(fastMA, "Fast MA", color=color.blue, linewidth=2)
+plot(slowMA, "Slow MA", color=color.red, linewidth=2)
+plot(strategy.position_size > 0 ? trailStop : na, "Trail Stop", color=color.red, style=plot.style_stepline, linewidth=2)
+
+// Entry signals
+plotshape(entry1, style=shape.triangleup, location=location.belowbar, color=color.lime, size=size.normal, title="MA Cross")
+plotshape(entry2, style=shape.circle, location=location.belowbar, color=color.yellow, size=size.small, title="Breakout")
+plotshape(entry3, style=shape.diamond, location=location.belowbar, color=color.orange, size=size.small, title="MA Reclaim")
+
+// Background trend
+bgcolor(uptrend ? color.new(color.green, 90) : color.new(color.red, 95))
+
+// ===== Performance Dashboard =====
+if barstate.islast
+    var table perfTable = table.new(position.top_right, 2, 8, bgcolor=color.white, border_width=1)
+    
+    table.cell(perfTable, 0, 0, "📈 PERFORMANCE", text_color=color.white, bgcolor=color.blue)
+    table.cell(perfTable, 1, 0, "VALUES", text_color=color.white, bgcolor=color.blue)
+    
+    totalReturn = (strategy.netprofit / strategy.initial_capital) * 100
+    table.cell(perfTable, 0, 1, "Total Return", text_color=color.black)
+    table.cell(perfTable, 1, 1, str.tostring(totalReturn, "#.#") + "%", 
+              text_color=totalReturn > 500 ? color.green : (totalReturn > 200 ? color.orange : color.red))
+    
+    table.cell(perfTable, 0, 2, "Total Trades", text_color=color.black)
+    table.cell(perfTable, 1, 2, str.tostring(strategy.closedtrades), text_color=color.black)
+    
+    winRate = strategy.closedtrades > 0 ? strategy.wintrades / strategy.closedtrades * 100 : 0
+    table.cell(perfTable, 0, 3, "Win Rate", text_color=color.black)
+    table.cell(perfTable, 1, 3, str.tostring(winRate, "#.#") + "%", 
+              text_color=winRate > 50 ? color.green : color.red)
+    
+    pf = strategy.grossloss != 0 ? strategy.grossprofit / math.abs(strategy.grossloss) : 0
+    table.cell(perfTable, 0, 4, "Profit Factor", text_color=color.black)
+    table.cell(perfTable, 1, 4, str.tostring(pf, "#.##"), 
+              text_color=pf > 2.0 ? color.green : (pf > 1.5 ? color.orange : color.red))
+    
+    maxDD = (strategy.max_drawdown / strategy.initial_capital) * 100
+    table.cell(perfTable, 0, 5, "Max Drawdown", text_color=color.black)
+    table.cell(perfTable, 1, 5, str.tostring(maxDD, "#.#") + "%", 
+              text_color=maxDD < 20 ? color.green : color.red)
+    
+    avgWin = strategy.wintrades > 0 ? (strategy.grossprofit / strategy.wintrades / strategy.initial_capital) * 100 : 0
+    table.cell(perfTable, 0, 6, "Avg Win %", text_color=color.black)
+    table.cell(perfTable, 1, 6, str.tostring(avgWin, "#.##") + "%", text_color=color.green)
+    
+    avgLoss = strategy.losstrades > 0 ? (math.abs(strategy.grossloss) / strategy.losstrades / strategy.initial_capital) * 100 : 0
+    table.cell(perfTable, 0, 7, "Avg Loss %", text_color=color.black)
+    table.cell(perfTable, 1, 7, str.tostring(avgLoss, "#.##") + "%", text_color=color.red)
