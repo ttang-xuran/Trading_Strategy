@@ -115,6 +115,20 @@ interface TradingStrategy {
 }
 
 const tradingStrategies: Record<StrategyType, TradingStrategy> = {
+  'best-trend-following': {
+    id: 'best-trend-following',
+    name: 'Best Trend Following Strategy',
+    description: 'High-return multi-entry trend following with aggressive compounding position sizing (15% risk per trade). Features MA crossover, breakout, and pullback entries with dynamic trailing stops.',
+    parameters: {
+      fastLen: 8,
+      slowLen: 30,
+      atrLen: 14,
+      atrMult: 2.0,
+      riskPercent: 15.0,
+      useCompounding: true,
+      maxEquityUsage: 0.95
+    }
+  },
   'breakout-long-short': {
     id: 'breakout-long-short',
     name: 'Breakout for long and short',
@@ -157,20 +171,6 @@ const tradingStrategies: Record<StrategyType, TradingStrategy> = {
       riskPerTrade: 5.0
     }
   },
-  'best-trend-following': {
-    id: 'best-trend-following',
-    name: 'Best Trend Following Strategy',
-    description: 'High-return multi-entry trend following with aggressive compounding position sizing (15% risk per trade). Features MA crossover, breakout, and pullback entries with dynamic trailing stops.',
-    parameters: {
-      fastLen: 8,
-      slowLen: 30,
-      atrLen: 14,
-      atrMult: 2.0,
-      riskPercent: 15.0,
-      useCompounding: true,
-      maxEquityUsage: 0.95
-    }
-  },
   'mean-reversion': {
     id: 'mean-reversion',
     name: 'Mean Reversion',
@@ -199,7 +199,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [selectedSource, setSelectedSource] = useState('binance')
   const [selectedInstrument, setSelectedInstrument] = useState('BTC/USD')
-  const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>('breakout-long-short')
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyType>('best-trend-following')
   const [livePrice, setLivePrice] = useState(initialPrice)
   const [activeTab, setActiveTab] = useState<'overview' | 'description' | 'performance' | 'trades'>('overview')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -1192,7 +1192,7 @@ function App() {
   
   // User-configurable strategy parameters (dynamically set based on selected strategy)
   const [userParameters, setUserParameters] = useState(
-    tradingStrategies['breakout-long-short'].parameters
+    tradingStrategies['best-trend-following'].parameters
   )
 
   // Update user parameters when strategy changes
