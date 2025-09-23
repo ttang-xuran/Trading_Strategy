@@ -2887,6 +2887,88 @@ function App() {
                   </div>
                 )}
 
+                {selectedStrategy === 'best-trend-following' && (
+                  <div style={{ color: '#c9d1d9', lineHeight: '1.6' }}>
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Strategy Overview</h4>
+                      <p style={{ marginBottom: '1rem' }}>
+                        The "Best Trend Following Strategy" is a high-return multi-entry trend following system with aggressive compounding position sizing.
+                        This strategy implements 15% risk per trade with dynamic compounding, featuring multiple entry conditions and sophisticated
+                        trailing stop management for maximum trend capture.
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Entry Conditions</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>MA Crossover:</strong> Fast EMA (8) crosses above Slow EMA (30) with uptrend confirmation
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Breakout Entry:</strong> Price breaks above 10-period high with trend and momentum alignment
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>MA Reclaim:</strong> Price reclaims fast EMA after pullback in established uptrend
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Momentum Filter:</strong> 5-period momentum confirmation required for all entries
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Position Sizing & Risk Management</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Aggressive Risk:</strong> 15% of equity per trade (much higher than typical 1-2%)
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Compounding:</strong> Position size increases with account growth for exponential returns
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Max Allocation:</strong> Limited to 95% of equity to prevent over-leverage
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>ATR-Based Stops:</strong> 2x ATR (14-period) for dynamic stop loss calculation
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Exit Strategy</h4>
+                      <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Trailing Stop:</strong> Dynamic ATR-based trailing stop that moves up with favorable price action
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Trend Exit:</strong> Exit when price breaks below fast EMA, indicating trend weakness
+                        </li>
+                        <li style={{ marginBottom: '0.5rem' }}>
+                          <strong>Stop Loss:</strong> Hard stop at entry price minus 2x ATR for risk control
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h4 style={{ color: '#58a6ff', marginBottom: '1rem', fontSize: '1.1rem' }}>Key Features</h4>
+                      <div style={{ marginBottom: '1rem' }}>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#238636' }}>High Return Potential:</strong> Aggressive 15% risk allocation for maximum growth
+                        </p>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#58a6ff' }}>Multiple Entries:</strong> Three distinct entry patterns increase opportunity capture
+                        </p>
+                        <p style={{ marginBottom: '0.5rem' }}>
+                          <strong style={{ color: '#d2a8ff' }}>Trend Following:</strong> EMA-based system designed for strong trending markets
+                        </p>
+                        <p>
+                          <strong style={{ color: '#f85149' }}>Compounding Power:</strong> Exponential growth through reinvestment of profits
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {(selectedStrategy === 'mean-reversion' || selectedStrategy === 'momentum') && (
                   <div style={{ color: '#c9d1d9', lineHeight: '1.6' }}>
                     <div style={{ 
