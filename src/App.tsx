@@ -2573,6 +2573,177 @@ function App() {
                         </>
                       )}
 
+                      {selectedStrategy === 'best-trend-following' && (
+                        <>
+                          {/* Fast EMA Length */}
+                          <div>
+                            <label style={{
+                              display: 'block',
+                              fontSize: '0.9rem',
+                              color: '#f0f6fc',
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Fast EMA Length: {userParameters.fastLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="5"
+                              max="20"
+                              value={userParameters.fastLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                fastLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 5-20 (Default: 8) - Fast trend detection
+                            </div>
+                          </div>
+
+                          {/* Slow EMA Length */}
+                          <div>
+                            <label style={{
+                              display: 'block',
+                              fontSize: '0.9rem',
+                              color: '#f0f6fc',
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Slow EMA Length: {userParameters.slowLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="20"
+                              max="50"
+                              value={userParameters.slowLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                slowLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 20-50 (Default: 30) - Trend direction filter
+                            </div>
+                          </div>
+
+                          {/* ATR Length */}
+                          <div>
+                            <label style={{
+                              display: 'block',
+                              fontSize: '0.9rem',
+                              color: '#f0f6fc',
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ATR Length: {userParameters.atrLen}
+                            </label>
+                            <input
+                              type="range"
+                              min="10"
+                              max="30"
+                              value={userParameters.atrLen}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                atrLen: parseInt(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 10-30 (Default: 14) - Volatility measurement
+                            </div>
+                          </div>
+
+                          {/* ATR Multiplier */}
+                          <div>
+                            <label style={{
+                              display: 'block',
+                              fontSize: '0.9rem',
+                              color: '#f0f6fc',
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              ATR Multiplier: {userParameters.atrMult}
+                            </label>
+                            <input
+                              type="range"
+                              min="1.0"
+                              max="4.0"
+                              step="0.1"
+                              value={userParameters.atrMult}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                atrMult: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 1.0-4.0 (Default: 2.0) - Stop loss distance
+                            </div>
+                          </div>
+
+                          {/* Risk Percent */}
+                          <div>
+                            <label style={{
+                              display: 'block',
+                              fontSize: '0.9rem',
+                              color: '#f0f6fc',
+                              marginBottom: '0.5rem',
+                              fontWeight: '500'
+                            }}>
+                              Risk Per Trade: {userParameters.riskPercent}%
+                            </label>
+                            <input
+                              type="range"
+                              min="5"
+                              max="25"
+                              step="1"
+                              value={userParameters.riskPercent}
+                              onChange={(e) => setUserParameters(prev => ({
+                                ...prev,
+                                riskPercent: parseFloat(e.target.value)
+                              }))}
+                              style={{
+                                width: '100%',
+                                height: '4px',
+                                backgroundColor: '#30363d',
+                                outline: 'none',
+                                borderRadius: '2px'
+                              }}
+                            />
+                            <div style={{ fontSize: '0.8rem', color: '#7d8590', marginTop: '0.25rem' }}>
+                              Range: 5-25% (Default: 15%) - Aggressive position sizing
+                            </div>
+                          </div>
+                        </>
+                      )}
+
                       {/* Reset to Defaults Button */}
                       <button
                         onClick={() => setUserParameters(tradingStrategies[selectedStrategy].parameters)}
